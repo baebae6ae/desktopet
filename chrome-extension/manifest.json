@@ -1,0 +1,37 @@
+{
+  "manifest_version": 3,
+  "name": "데스크토펫 — 바이브코딩 프롬프트 도우미",
+  "version": "1.0.0",
+  "description": "귀여운 8비트 펫이 브라우저를 돌아다니며, 쉬운 질문으로 무엇을 요청해야 할지 짚어주고 프롬프트 생성 사이트로 안내해요.",
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_title": "데스크토펫",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "permissions": ["storage", "scripting"],
+  "host_permissions": ["http://*/*", "https://*/*"],
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["content/pet.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["vendor/*.js", "content/pet.css", "icons/*.png"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}

@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>데스크토펫 · 8비트 바탕화면 친구들</title>
+  <meta name="description" content="브라우저 화면 전체를 돌아다니는 8비트 픽셀 캐릭터들. 마우스를 가까이 대면 반응합니다." />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- 캐릭터들이 돌아다니는 무대. 브라우저 창(뷰포트) 전체를 덮는다.
+       참고: 웹 페이지는 브라우저 창 밖(실제 OS 바탕화면)에는 그릴 수 없으므로,
+       이 창 전체를 "바탕화면"처럼 사용한다. -->
+  <main id="stage" class="stage" aria-label="바탕화면 펫 놀이터">
+    <p class="stage__hint" aria-hidden="true">마우스를 캐릭터 근처로 가져가 보세요 &gt;_</p>
+  </main>
+
+  <!-- 화면 낭독기용 안내 메시지 영역 (시각적으로는 숨김) -->
+  <div id="live-region" class="sr-only" role="status" aria-live="polite"></div>
+
+  <!-- 캐릭터들을 화면 전체에서 잘 보이게 하기 위해, 설정 UI는 평소엔 접어둔다 -->
+  <button
+    id="panel-toggle"
+    type="button"
+    class="panel-toggle"
+    aria-expanded="false"
+    aria-controls="panel"
+  >
+    ⚙ 설정
+  </button>
+
+  <aside id="panel" class="panel" hidden>
+    <header class="app-header">
+      <h1>데스크토펫 <span class="app-header__cursor" aria-hidden="true">&gt;_</span></h1>
+      <p class="app-header__desc">8비트 스타일 캐릭터들이 화면 위를 돌아다녀요. 모두 파워쉘 커서 얼굴(<code>&gt;_</code>)을 하고 있어요.</p>
+    </header>
+
+    <section class="control-panel" aria-label="캐릭터 관리 패널">
+      <fieldset class="control-panel__spawn">
+        <legend>캐릭터 추가하기</legend>
+        <div class="spawn-buttons" id="spawn-buttons" role="group" aria-label="추가할 캐릭터 종류 선택">
+          <!-- 종류별 추가 버튼은 script.js가 채웁니다 -->
+        </div>
+      </fieldset>
+
+      <fieldset class="control-panel__list">
+        <legend>내 캐릭터 목록</legend>
+        <ul id="pet-list" class="pet-list" aria-label="현재 활성화된 캐릭터 목록">
+          <!-- 각 캐릭터의 이름 변경/삭제 UI가 여기 채워집니다 -->
+        </ul>
+        <p id="pet-list-empty" class="pet-list__empty">아직 캐릭터가 없어요. 위에서 추가해 보세요!</p>
+      </fieldset>
+
+      <div class="control-panel__actions">
+        <button id="reset-btn" type="button" class="btn btn--danger">
+          전체 초기화
+        </button>
+      </div>
+
+      <p id="form-status" class="form-status" role="status" aria-live="polite"></p>
+    </section>
+
+    <footer class="app-footer">
+      <p>
+        ⚠️ 이름/캐릭터 구성은 <strong>이 브라우저의 localStorage</strong>에만 저장됩니다.
+        다른 기기·다른 브라우저에서는 보이지 않으며, 서버로 전송되지 않습니다.
+        비밀번호 등 민감한 정보는 이름으로 입력하지 마세요.
+      </p>
+    </footer>
+  </aside>
+
+  <script src="script.js"></script>
+</body>
+</html>

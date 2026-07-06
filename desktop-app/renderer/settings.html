@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <title>데스크토펫 설정</title>
+  <link rel="stylesheet" href="settings.css" />
+</head>
+<body>
+  <header>
+    <h1>데스크토펫 <span class="cursor">&gt;_</span></h1>
+    <p>바탕화면 위를 돌아다니는 캐릭터들을 관리합니다.</p>
+  </header>
+
+  <section aria-label="캐릭터 추가">
+    <h2>캐릭터 추가하기</h2>
+    <div id="spawn-buttons" class="spawn-buttons"></div>
+  </section>
+
+  <section aria-label="캐릭터 목록">
+    <h2>내 캐릭터 목록</h2>
+    <ul id="pet-list" class="pet-list"></ul>
+    <p id="pet-list-empty" class="empty">아직 캐릭터가 없어요. 위에서 추가해 보세요!</p>
+  </section>
+
+  <div class="actions">
+    <button id="reset-btn" type="button" class="btn btn--danger">전체 초기화</button>
+  </div>
+
+  <p id="status" class="status" role="status" aria-live="polite"></p>
+
+  <footer>
+    <p>
+      ⚠️ 이름/캐릭터 구성은 <strong>이 컴퓨터의 로컬 파일</strong>에만 저장됩니다.
+      다른 컴퓨터에서는 보이지 않으며, 인터넷으로 전송되지 않습니다.
+      비밀번호 등 민감한 정보는 이름으로 입력하지 마세요.
+    </p>
+  </footer>
+
+  <script src="settings-renderer.js"></script>
+</body>
+</html>

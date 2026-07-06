@@ -1,0 +1,128 @@
+* { box-sizing: border-box; }
+body {
+  width: 260px;
+  margin: 0;
+  padding: 14px;
+  background: #14171d;
+  color: #eef1f6;
+  font-family: "Consolas", "D2Coding", system-ui, sans-serif;
+}
+header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+header img { width: 36px; height: 36px; image-rendering: pixelated; }
+h1 { font-size: 15px; margin: 0; }
+header p { margin: 2px 0 0; font-size: 11px; color: #9aa4b5; }
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: #1b2028;
+  border: 1px solid #2c3340;
+  border-radius: 9px;
+  padding: 9px 11px;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+select {
+  background: #0f1319;
+  color: #eef1f6;
+  border: 1px solid #2c3340;
+  border-radius: 6px;
+  padding: 4px 6px;
+  font-family: inherit;
+}
+input[type="checkbox"] { width: 16px; height: 16px; accent-color: #5cff8f; }
+
+.sites {
+  margin-bottom: 6px;
+}
+.sites h2 {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #9aa4b5;
+  margin: 4px 0 6px;
+  font-weight: 700;
+}
+.row--current span {
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.site-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 120px;
+  overflow-y: auto;
+}
+.site-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: #1b2028;
+  border: 1px solid #2c3340;
+  border-radius: 8px;
+  padding: 6px 8px;
+  font-size: 12px;
+}
+.site-row span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.site-row button {
+  border: none;
+  background: transparent;
+  color: #ff6b6b;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  padding: 2px 4px;
+}
+.site-row button:hover {
+  color: #ff9b9b;
+}
+
+.empty {
+  font-size: 11px;
+  color: #6b7280;
+  margin: 2px 2px 8px;
+}
+
+.hint {
+  font-size: 11px;
+  color: #ffcf6b;
+  min-height: 14px;
+  margin: 2px 2px 10px;
+}
+
+.site {
+  display: block;
+  text-align: center;
+  text-decoration: none;
+  background: linear-gradient(135deg, #5cff8f, #37d0ff);
+  color: #08131a;
+  font-weight: 800;
+  border-radius: 9px;
+  padding: 11px;
+  font-size: 13px;
+}
+footer {
+  margin-top: 12px;
+  font-size: 11px;
+  color: #9aa4b5;
+  line-height: 1.5;
+}

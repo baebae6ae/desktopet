@@ -1,0 +1,517 @@
+/* 데스크토펫 (데스크톱 앱) - 캐릭터 창 스타일.
+   웹 버전 style.css의 .pet 관련 규칙을 창 하나짜리 구조에 맞게 옮겨왔다. */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  background: transparent;
+  overflow: hidden;
+  font-family: "Consolas", "D2Coding", "Courier New", monospace, system-ui, sans-serif;
+  user-select: none;
+}
+
+#pet-root {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pet__body {
+  position: relative;
+  cursor: pointer;
+  will-change: transform;
+}
+
+.pet__sprite {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: block;
+  transform: scale(var(--sprite-scale, 1));
+  transform-origin: center;
+}
+
+.pet--flip .pet__sprite {
+  transform: scale(var(--sprite-scale, 1)) scaleX(-1);
+}
+
+.pet__shadow {
+  position: absolute;
+  left: 50%;
+  bottom: -3px;
+  width: 70%;
+  height: 4px;
+  background: radial-gradient(closest-side, rgba(0, 0, 0, 0.55), transparent);
+  transform: translateX(-50%);
+  border-radius: 50%;
+}
+
+/* 팔다리: 몸통 그림(SVG)과는 별개의 작은 사각형 요소라서 독립적으로
+   흔들 수 있다. 실루엣과 겹치는 절반은 sprite 뒤에 깔려 가려지고, 밖으로
+   나온 절반만 보여서 몸통에 붙어있는 것처럼 보인다. */
+.pet__limb {
+  position: absolute;
+  border-radius: 2px;
+  transition: rotate 0.15s ease;
+}
+
+/* 기본 자세: 팔은 수평(T자)이 아니라 옆구리에 자연스럽게 늘어뜨린
+   모양이 기본값이다. 활동별 애니메이션이 없을 때도 이 각도로 보인다. */
+.pet__limb--arm.pet__limb--left {
+  transform-origin: right center;
+  rotate: -100deg;
+}
+
+.pet__limb--arm.pet__limb--right {
+  transform-origin: left center;
+  rotate: 100deg;
+}
+
+.pet__limb--leg.pet__limb--left,
+.pet__limb--leg.pet__limb--right {
+  transform-origin: top center;
+}
+
+/* 걷기: 다리는 수직 기준(0deg)으로, 팔은 늘어뜨린 기준(±100deg)으로
+   서로 반대쪽 다리와 같은 위상으로 앞뒤로 흔든다(왼팔-오른다리가 같이
+   앞으로, 오른팔-왼다리가 같이 뒤로). */
+@keyframes pet-leg-swing {
+  0%,
+  100% {
+    rotate: -22deg;
+  }
+  50% {
+    rotate: 22deg;
+  }
+}
+
+@keyframes pet-arm-swing-left {
+  0%,
+  100% {
+    rotate: -122deg;
+  }
+  50% {
+    rotate: -78deg;
+  }
+}
+
+@keyframes pet-arm-swing-right {
+  0%,
+  100% {
+    rotate: 122deg;
+  }
+  50% {
+    rotate: 78deg;
+  }
+}
+
+.pet--walking .pet__limb--arm.pet__limb--left {
+  animation: pet-arm-swing-left 0.7s ease-in-out infinite;
+}
+
+.pet--walking .pet__limb--leg.pet__limb--right {
+  animation: pet-leg-swing 0.7s ease-in-out infinite;
+}
+
+.pet--walking .pet__limb--arm.pet__limb--right {
+  animation: pet-arm-swing-right 0.7s ease-in-out infinite reverse;
+}
+
+.pet--walking .pet__limb--leg.pet__limb--left {
+  animation: pet-leg-swing 0.7s ease-in-out infinite reverse;
+}
+
+/* 얼굴: 터미널 화면에 뜨는 표정 전체가 하나의 문자열이다(">_", ">_<", "-_-" 등 -
+   pet-renderer.js가 window.desktopPet.EXPRESSIONS에서 골라 textContent로 채움). */
+.pet__face {
+  position: absolute;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  align-items: center;
+  color: #5cff8f;
+  font-weight: 700;
+  line-height: 1;
+  text-shadow: 0 0 0.08em currentColor;
+  pointer-events: none;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.pet__face-slot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pet__bubble {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%) translateY(4px);
+  background: #f4f7fb;
+  color: #1a1d22;
+  padding: 0.25rem 0.55rem;
+  border-radius: 6px;
+  font-size: 11px;
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+  pointer-events: none;
+}
+
+.pet__bubble::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: #f4f7fb;
+}
+
+.pet--talking .pet__bubble {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.pet__name {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-top: 2px;
+  font-size: 10px;
+  color: #cfd6e2;
+  background: rgba(10, 12, 16, 0.55);
+  padding: 1px 4px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.pet__zzz {
+  position: absolute;
+  bottom: 85%;
+  right: -4px;
+  font-size: 11px;
+  color: #9aa4b5;
+  opacity: 0;
+  pointer-events: none;
+}
+
+@keyframes pet-zzz-float {
+  0% {
+    translate: 0 0;
+    opacity: 0.15;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    translate: 0 -10px;
+    opacity: 0;
+  }
+}
+
+.pet--sleeping .pet__zzz {
+  opacity: 1;
+  animation: pet-zzz-float 1.8s ease-in-out infinite;
+}
+
+@keyframes pet-bounce {
+  0% {
+    translate: 0 0;
+    scale: 1 1;
+    rotate: -3deg;
+  }
+  25% {
+    translate: 0 -7px;
+    scale: 1.04 0.96;
+    rotate: 0deg;
+  }
+  50% {
+    translate: 0 0;
+    scale: 1 1;
+    rotate: 3deg;
+  }
+  75% {
+    translate: 0 -7px;
+    scale: 1.04 0.96;
+    rotate: 0deg;
+  }
+  100% {
+    translate: 0 0;
+    scale: 1 1;
+    rotate: -3deg;
+  }
+}
+
+.pet--walking .pet__body {
+  animation: pet-bounce 0.7s ease-in-out infinite;
+}
+
+@keyframes pet-shadow-walk {
+  0%,
+  50%,
+  100% {
+    scale: 1;
+    opacity: 0.5;
+  }
+  25%,
+  75% {
+    scale: 0.7;
+    opacity: 0.25;
+  }
+}
+
+.pet--walking .pet__shadow {
+  animation: pet-shadow-walk 0.7s ease-in-out infinite;
+}
+
+@keyframes pet-pop {
+  0% {
+    scale: 1;
+  }
+  40% {
+    scale: 1.18;
+  }
+  100% {
+    scale: 1;
+  }
+}
+
+.pet--excited .pet__body {
+  animation: pet-pop 0.4s ease-in-out;
+}
+
+/* 반응할 때(클릭/근접) 팔을 번쩍 들어올리는 "만세" 동작. 팔 사각형은 어깨
+   위치(고정된 회전축)를 중심으로 도는 것만으로는 이동 폭이 작아 "번쩍 든"
+   느낌이 잘 안 나서, 회전과 함께 위쪽으로 이동(translate)도 같이 준다. */
+@keyframes pet-arm-cheer-left {
+  0% {
+    rotate: -100deg;
+    translate: 0 0;
+  }
+  40% {
+    rotate: -60deg;
+    translate: -20% -320%;
+  }
+  100% {
+    rotate: -100deg;
+    translate: 0 0;
+  }
+}
+
+@keyframes pet-arm-cheer-right {
+  0% {
+    rotate: 100deg;
+    translate: 0 0;
+  }
+  40% {
+    rotate: 60deg;
+    translate: 20% -320%;
+  }
+  100% {
+    rotate: 100deg;
+    translate: 0 0;
+  }
+}
+
+.pet--excited .pet__limb--arm.pet__limb--left {
+  animation: pet-arm-cheer-left 0.4s ease-in-out;
+}
+
+.pet--excited .pet__limb--arm.pet__limb--right {
+  animation: pet-arm-cheer-right 0.4s ease-in-out;
+}
+
+@keyframes pet-breathe {
+  0%,
+  100% {
+    scale: 1;
+  }
+  50% {
+    scale: 1.04;
+  }
+}
+
+.pet--sitting .pet__body,
+.pet--sleeping .pet__body {
+  animation: pet-breathe 2.4s ease-in-out infinite;
+}
+
+/* 앉아있을 때는 팔을 늘어뜨린 채로 아주 살짝만 흔들어 숨쉬는 느낌을 준다 */
+@keyframes pet-arm-idle-left {
+  0%,
+  100% {
+    rotate: -104deg;
+  }
+  50% {
+    rotate: -96deg;
+  }
+}
+
+@keyframes pet-arm-idle-right {
+  0%,
+  100% {
+    rotate: 104deg;
+  }
+  50% {
+    rotate: 96deg;
+  }
+}
+
+.pet--sitting .pet__limb--arm.pet__limb--left {
+  animation: pet-arm-idle-left 2.4s ease-in-out infinite;
+}
+
+.pet--sitting .pet__limb--arm.pet__limb--right {
+  animation: pet-arm-idle-right 2.4s ease-in-out infinite;
+}
+
+@keyframes pet-jump {
+  0% {
+    translate: 0 0;
+    scale: 1 1;
+  }
+  30% {
+    translate: 0 -16px;
+    scale: 0.95 1.08;
+  }
+  55% {
+    translate: 0 -14px;
+    scale: 1.06 0.92;
+  }
+  100% {
+    translate: 0 0;
+    scale: 1 1;
+  }
+}
+
+.pet--jumping .pet__body {
+  animation: pet-jump 0.5s ease-out 1;
+}
+
+/* 점프할 때 팔을 위로 번쩍 뻗어 도약하는 느낌을 준다(몸통 점프 타이밍에 맞춤) */
+@keyframes pet-arm-jump-left {
+  0% {
+    rotate: -100deg;
+    translate: 0 0;
+  }
+  30% {
+    rotate: -60deg;
+    translate: -20% -320%;
+  }
+  55% {
+    rotate: -70deg;
+    translate: -16% -280%;
+  }
+  100% {
+    rotate: -100deg;
+    translate: 0 0;
+  }
+}
+
+@keyframes pet-arm-jump-right {
+  0% {
+    rotate: 100deg;
+    translate: 0 0;
+  }
+  30% {
+    rotate: 60deg;
+    translate: 20% -320%;
+  }
+  55% {
+    rotate: 70deg;
+    translate: 16% -280%;
+  }
+  100% {
+    rotate: 100deg;
+    translate: 0 0;
+  }
+}
+
+.pet--jumping .pet__limb--arm.pet__limb--left {
+  animation: pet-arm-jump-left 0.5s ease-out 1;
+}
+
+.pet--jumping .pet__limb--arm.pet__limb--right {
+  animation: pet-arm-jump-right 0.5s ease-out 1;
+}
+
+@keyframes pet-shadow-jump {
+  0%,
+  100% {
+    scale: 1;
+    opacity: 0.5;
+  }
+  40% {
+    scale: 0.45;
+    opacity: 0.18;
+  }
+}
+
+.pet--jumping .pet__shadow {
+  animation: pet-shadow-jump 0.5s ease-out 1;
+}
+
+@keyframes pet-spin {
+  0% {
+    rotate: 0deg;
+  }
+  100% {
+    rotate: 360deg;
+  }
+}
+
+.pet--spinning .pet__body {
+  animation: pet-spin 0.6s ease-in-out 1;
+}
+
+/* 빙글 돌 때 팔을 옆으로 활짝 뻗었다가 돌아오게 해서 회전에 힘을 싣는다 */
+@keyframes pet-arm-spin-left {
+  0%,
+  100% {
+    rotate: -100deg;
+  }
+  50% {
+    rotate: -10deg;
+  }
+}
+
+@keyframes pet-arm-spin-right {
+  0%,
+  100% {
+    rotate: 100deg;
+  }
+  50% {
+    rotate: 10deg;
+  }
+}
+
+.pet--spinning .pet__limb--arm.pet__limb--left {
+  animation: pet-arm-spin-left 0.6s ease-in-out 1;
+}
+
+.pet--spinning .pet__limb--arm.pet__limb--right {
+  animation: pet-arm-spin-right 0.6s ease-in-out 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pet__body,
+  .pet__bubble,
+  .pet__zzz,
+  .pet__shadow,
+  .pet__limb {
+    animation: none !important;
+    transition: none !important;
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "name": "desktopet-app",
+  "version": "1.0.0",
+  "description": "8비트 캐릭터가 실제 컴퓨터 바탕화면 위를 돌아다니는 데스크톱 앱",
+  "private": true,
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder"
+  },
+  "devDependencies": {
+    "electron": "^43.0.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.desktopet.app",
+    "productName": "데스크토펫",
+    "files": [
+      "main.js",
+      "preload-pet.js",
+      "preload-settings.js",
+      "shared/**/*",
+      "renderer/**/*"
+    ],
+    "mac": {
+      "target": "dmg",
+      "category": "public.app-category.entertainment"
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "linux": {
+      "target": "AppImage",
+      "category": "Utility"
+    }
+  }
+}
