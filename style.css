@@ -1,7 +1,7 @@
 /* =========================================================
-   데스크토펫 스타일시트
-   - 8비트 픽셀아트는 script.js가 box-shadow로 그립니다.
-   - 여기서는 레이아웃, 반응형, 접근성(대비/포커스/모션감소)을 담당합니다.
+   데스크토펫 (웹앱) 스타일시트
+   - 캐릭터 자체의 그림/애니메이션은 chrome-extension/content/pet.css를 Shadow DOM에
+     그대로 주입해서 쓴다(app.js 참고) — 여기서는 무대/설정 패널/가챠 UI만 담당한다.
    ========================================================= */
 
 :root {
@@ -9,23 +9,11 @@
 
   --bg-deep: #10131a;
   --bg-grid: #171b24;
-  --panel-bg: #1b2028;
   --panel-border: #2c3340;
   --text-main: #eef1f6;
   --text-muted: #9aa4b5;
   --accent: #5cff8f;
-  --accent-dark: #2fbf68;
-  --danger: #ff6b6b;
-  --danger-dark: #c94f4f;
-
-  --pet-scale: 0.85;
   --focus-ring: 3px solid var(--accent);
-}
-
-@media (max-width: 700px) {
-  :root {
-    --pet-scale: 0.6;
-  }
 }
 
 * {
@@ -37,7 +25,6 @@ body {
   margin: 0;
   padding: 0;
   height: 100%;
-  /* 캐릭터가 화면 전체를 "바탕화면"처럼 돌아다니는 동안 페이지 자체는 스크롤되지 않게 한다 */
   overflow: hidden;
 }
 
@@ -47,7 +34,6 @@ body {
   font-family: "Consolas", "D2Coding", "Courier New", monospace, system-ui, sans-serif;
 }
 
-/* 화면에는 안 보이지만 스크린리더에는 읽히는 요소 */
 .sr-only {
   position: absolute;
   width: 1px;
@@ -61,8 +47,7 @@ body {
 }
 
 /* -----------------------------
-   무대 (캐릭터가 돌아다니는 영역)
-   브라우저 창(뷰포트) 전체를 덮어서 "바탕화면"처럼 보이게 한다.
+   무대 (펫이 돌아다니는 영역) — 뷰포트 전체를 덮는다
    ----------------------------- */
 .stage {
   position: fixed;
@@ -88,7 +73,7 @@ body {
 }
 
 /* -----------------------------
-   설정 패널 토글 버튼 (항상 화면에 떠 있음)
+   설정 패널 토글 버튼(항상 떠 있음) + 슬라이드 패널
    ----------------------------- */
 .panel-toggle {
   position: fixed;
@@ -105,774 +90,427 @@ body {
   cursor: pointer;
   backdrop-filter: blur(4px);
 }
-
 .panel-toggle:hover {
   background: rgba(42, 50, 64, 0.9);
 }
-
 .panel-toggle:focus-visible {
   outline: var(--focus-ring);
   outline-offset: 2px;
 }
 
-/* -----------------------------
-   설정 패널 (캐릭터가 화면을 채울 수 있도록 평소엔 접혀 있다)
-   ----------------------------- */
 .panel {
   position: fixed;
   top: 58px;
   right: 12px;
   z-index: 15;
-  width: min(92vw, 420px);
+  width: min(92vw, 340px);
   max-height: calc(100dvh - 76px);
   overflow-y: auto;
-  background: rgba(19, 22, 28, 0.96);
+  padding: 14px;
+  background: rgba(19, 22, 28, 0.97);
   border: 1px solid var(--panel-border);
   border-radius: 12px;
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  font-size: 13px;
 }
-
 .panel[hidden] {
   display: none;
 }
 
-/* -----------------------------
-   헤더
-   ----------------------------- */
 .app-header {
-  padding: 1rem 1.25rem 0.25rem;
+  margin-bottom: 12px;
 }
-
 .app-header h1 {
   margin: 0;
-  font-size: clamp(1.3rem, 2.2vw, 1.9rem);
+  font-size: clamp(1.1rem, 2.2vw, 1.4rem);
   letter-spacing: 0.02em;
 }
-
 .app-header__cursor {
   color: var(--accent);
   animation: blink 1s steps(1) infinite;
 }
-
 .app-header__desc {
   margin: 0.35rem 0 0;
   color: var(--text-muted);
-  font-size: 0.95rem;
-}
-
-.app-header__desc code {
-  color: var(--accent);
-  background: rgba(92, 255, 143, 0.08);
-  padding: 0 0.25em;
-  border-radius: 3px;
-}
-
-/* -----------------------------
-   컨트롤 패널
-   ----------------------------- */
-.control-panel {
-  padding: 0 1.1rem 1.1rem;
-  display: grid;
-  gap: 0.9rem;
-  grid-template-columns: 1fr;
-}
-
-fieldset {
-  border: 1px solid var(--panel-border);
-  border-radius: 10px;
-  background: var(--panel-bg);
-  padding: 0.9rem 1rem 1.1rem;
-}
-
-legend {
-  padding: 0 0.4rem;
-  color: var(--text-muted);
-  font-size: 0.85rem;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-}
-
-.spawn-buttons {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-
-.btn {
-  font-family: inherit;
-  font-size: 0.95rem;
-  padding: 0.55rem 0.9rem;
-  border-radius: 8px;
-  border: 1px solid var(--panel-border);
-  background: #232a35;
-  color: var(--text-main);
-  cursor: pointer;
-  transition: transform 0.12s ease, background-color 0.12s ease;
-}
-
-.btn:hover {
-  background: #2a3240;
-}
-
-.btn:active {
-  transform: scale(0.96);
-}
-
-.btn:focus-visible {
-  outline: var(--focus-ring);
-  outline-offset: 2px;
-}
-
-.btn--spawn {
-  border-color: var(--accent-dark);
-}
-
-.btn--danger {
-  border-color: var(--danger-dark);
-  color: var(--danger);
-}
-
-.btn--danger:hover {
-  background: rgba(255, 107, 107, 0.12);
-}
-
-.btn--small {
-  padding: 0.3rem 0.55rem;
   font-size: 0.85rem;
 }
-
-/* 캐릭터 목록 */
-.pet-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  max-height: 320px;
-  overflow-y: auto;
+@keyframes blink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
 }
 
-.pet-list__empty {
-  color: var(--text-muted);
-  font-size: 0.9rem;
-  margin: 0.4rem 0 0;
-}
-
-.pet-row {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  padding: 0.5rem 0.6rem;
-  background: #20262f;
-  border: 1px solid var(--panel-border);
-  border-radius: 8px;
-  flex-wrap: wrap;
-}
-
-.pet-row__species {
-  font-size: 0.8rem;
-  color: var(--text-muted);
-  min-width: 3.2em;
-}
-
-.pet-row__name-input {
-  flex: 1 1 8em;
-  min-width: 6em;
-  font-family: inherit;
-  background: #14181e;
-  border: 1px solid var(--panel-border);
-  color: var(--text-main);
-  border-radius: 6px;
-  padding: 0.35rem 0.5rem;
-}
-
-.pet-row__name-input:focus-visible {
-  outline: var(--focus-ring);
-  outline-offset: 1px;
-}
-
-.pet-row__affection {
-  font-size: 0.85rem;
-  color: var(--accent);
-  white-space: nowrap;
-}
-
-.control-panel__actions {
-  display: flex;
-  align-items: flex-start;
-}
-
-.form-status {
-  min-height: 1.2em;
-  font-size: 0.85rem;
-  color: var(--accent);
-  margin: 0;
-  padding: 0 1.25rem;
-}
-
-.form-status[data-error="true"] {
-  color: var(--danger);
-}
-
-/* -----------------------------
-   푸터
-   ----------------------------- */
 .app-footer {
-  padding: 0.75rem 1.25rem 1.25rem;
+  margin-top: 12px;
+  font-size: 11px;
   color: var(--text-muted);
-  font-size: 0.82rem;
-  border-top: 1px solid var(--panel-border);
+  line-height: 1.5;
+}
+.app-footer__note {
+  margin-top: 6px;
+  opacity: 0.8;
 }
 
-.app-footer p {
-  margin: 0;
-  max-width: 70ch;
+@media (prefers-reduced-motion: reduce) {
+  .app-header__cursor {
+    animation: none;
+  }
 }
 
 /* =========================================================
-   캐릭터(펫) 스타일
+   아래부터는 chrome-extension/popup/popup.css와 같은 컴포넌트
+   (탭/설정 행/가챠 뽑기·보관함)를 이 패널 폭에 맞춰 그대로 재사용한다.
    ========================================================= */
-.pet {
-  position: absolute;
-  top: 0;
-  left: 0;
-  transform: translate(0, 0) scale(var(--pet-scale));
-  transform-origin: center bottom;
-  cursor: pointer;
-  will-change: transform;
-}
 
-.pet__body {
-  position: relative;
-  width: 4px;
-  height: 4px;
-}
-
-/* 실제 픽셀 그림은 script.js가 SVG(<rect> 여러 개)로 그려서 넣는다.
-   (처음엔 box-shadow 수백 개를 쌓는 방식이었는데, 그림자 개수가 많아지면
-   일부 브라우저에서 모션 감소 설정과 겹쳤을 때 그림이 실제 위치와 다른
-   곳에 어긋나 보이는 렌더링 버그가 있어 SVG로 바꿨다.)
-   width/height는 script.js가 인라인 스타일로 채운다. */
-.pet__sprite {
-  position: absolute;
-  top: 0;
-  left: 0;
-  display: block;
-}
-
-/* 이동 방향에 따라 몸통 그림만 좌우 반전한다. 얼굴(표정)은 항상 그대로 보여야
-   하므로 .pet__face가 아니라 .pet__sprite에만 flip을 적용한다.
-   그리드 실제 크기(32칸 * 4px = 128px)의 중심으로 고정해 반전 축이
-   어긋나지 않게 한다. script.js의 COLS/ROWS/PX 상수와 반드시 일치해야 함. */
-.pet--flip .pet__sprite {
-  transform: scaleX(-1);
-  transform-origin: 64px 64px;
-}
-
-/* 팔다리: 몸통 그림(SVG)과는 별개의 작은 사각형 요소라서 독립적으로
-   흔들 수 있다. 실루엣과 겹치는 절반은 sprite 뒤에 깔려 가려지고, 밖으로
-   나온 절반만 보여서 몸통에 붙어있는 것처럼 보인다. */
-.pet__limb {
-  position: absolute;
-  border-radius: 2px;
-  transition: rotate 0.15s ease;
-}
-
-/* 기본 자세: 팔은 수평(T자)이 아니라 옆구리에 자연스럽게 늘어뜨린
-   모양이 기본값이다. 활동별 애니메이션이 없을 때도 이 각도로 보인다. */
-.pet__limb--arm.pet__limb--left {
-  transform-origin: right center;
-  rotate: -100deg;
-}
-
-.pet__limb--arm.pet__limb--right {
-  transform-origin: left center;
-  rotate: 100deg;
-}
-
-.pet__limb--leg.pet__limb--left,
-.pet__limb--leg.pet__limb--right {
-  transform-origin: top center;
-}
-
-/* 걷기: 다리는 수직 기준(0deg)으로, 팔은 늘어뜨린 기준(±100deg)으로
-   서로 반대쪽 다리와 같은 위상으로 앞뒤로 흔든다(왼팔-오른다리가 같이
-   앞으로, 오른팔-왼다리가 같이 뒤로). */
-@keyframes pet-leg-swing {
-  0%,
-  100% {
-    rotate: -22deg;
-  }
-  50% {
-    rotate: 22deg;
-  }
-}
-
-@keyframes pet-arm-swing-left {
-  0%,
-  100% {
-    rotate: -122deg;
-  }
-  50% {
-    rotate: -78deg;
-  }
-}
-
-@keyframes pet-arm-swing-right {
-  0%,
-  100% {
-    rotate: 122deg;
-  }
-  50% {
-    rotate: 78deg;
-  }
-}
-
-.pet--walking .pet__limb--arm.pet__limb--left {
-  animation: pet-arm-swing-left 0.7s ease-in-out infinite;
-}
-
-.pet--walking .pet__limb--leg.pet__limb--right {
-  animation: pet-leg-swing 0.7s ease-in-out infinite;
-}
-
-.pet--walking .pet__limb--arm.pet__limb--right {
-  animation: pet-arm-swing-right 0.7s ease-in-out infinite reverse;
-}
-
-.pet--walking .pet__limb--leg.pet__limb--left {
-  animation: pet-leg-swing 0.7s ease-in-out infinite reverse;
-}
-
-/* 얼굴: 왼쪽눈 / 입 / 오른쪽눈, 고정된 3칸(script.js의 EXPRESSIONS 참고).
-   문자열 전체를 가운데 정렬하면 ">_"(2글자)와 ">_<"(3글자)의 눈 위치가
-   서로 달라져 버리므로, 폭이 똑같은 3칸으로 나눠 각 칸을 독립적으로
-   가운데 정렬한다. 오른쪽 눈이 없는 표정은 그 칸이 그냥 비어 있어서
-   ">_<"에서 "<"만 지운 것처럼 자연스럽게 보인다. */
-.pet__face {
-  position: absolute;
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
+.row {
+  display: flex;
   align-items: center;
-  color: var(--accent);
-  font-weight: 700;
-  line-height: 1;
-  font-family: "Consolas", "D2Coding", "Courier New", monospace;
-  text-shadow: 0 0 0.08em currentColor;
-  pointer-events: none;
-  white-space: nowrap;
-  overflow: hidden;
-  transition: opacity 0.12s ease;
+  justify-content: space-between;
+  gap: 10px;
+  background: #1b2028;
+  border: 1px solid #2c3340;
+  border-radius: 9px;
+  padding: 9px 11px;
+  margin-bottom: 8px;
+}
+select {
+  background: #0f1319;
+  color: #eef1f6;
+  border: 1px solid #2c3340;
+  border-radius: 6px;
+  padding: 4px 6px;
+  font-family: inherit;
 }
 
-.pet__face-slot {
+.hint {
+  font-size: 11px;
+  color: #ffcf6b;
+  min-height: 14px;
+  margin: 2px 2px 10px;
+}
+
+.site {
+  display: block;
+  text-align: center;
+  text-decoration: none;
+  background: linear-gradient(135deg, #5cff8f, #37d0ff);
+  color: #08131a;
+  font-weight: 800;
+  border-radius: 9px;
+  padding: 11px;
+  font-size: 13px;
+}
+
+/* ---------------- 탭 ---------------- */
+.tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.tab {
+  flex: 1;
+  background: #1b2028;
+  border: 1px solid #2c3340;
+  color: #9aa4b5;
+  border-radius: 8px;
+  padding: 8px 6px;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.tab[aria-selected="true"] {
+  background: linear-gradient(135deg, #5cff8f, #37d0ff);
+  color: #08131a;
+  border-color: transparent;
+}
+.tab__coins {
+  font-size: 10.5px;
+  font-weight: 700;
+  opacity: 0.85;
+}
+
+/* ---------------- 가챠 ---------------- */
+.gacha-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.gacha-coins {
+  background: #1b2028;
+  border: 1px solid #2c3340;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
+  font-weight: 700;
+}
+.gacha-pull {
+  flex: 1;
+  background: linear-gradient(135deg, #ffb03c, #ff6b6b);
+  color: #1a0f00;
+  border: none;
+  border-radius: 9px;
+  padding: 10px 8px;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.gacha-pull:disabled {
+  background: #2c3340;
+  color: #6b7280;
+  cursor: not-allowed;
+}
+.gacha-pull.is-spinning {
+  animation: pull-btn-pulse 0.5s ease-in-out infinite;
+}
+@keyframes pull-btn-pulse {
+  0%, 100% { scale: 1; }
+  50% { scale: 1.04; }
+}
+
+/* 버튼을 누르면 화면 중앙에서 빛이 터지고 아이템이 튀어나오는 "상자 개봉" 연출
+   (슬롯머신 릴/포인터 메타포는 쓰지 않는다) */
+.pullstage {
+  position: relative;
+  height: 168px;
+  margin: 4px 0 10px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: radial-gradient(circle at 50% 50%, #1b2028, #0b0d11 75%);
+  border: 1px solid #2c3340;
   display: flex;
   align-items: center;
   justify-content: center;
 }
-
-/* 말풍선 */
-.pet__bubble {
+.pullstage__flash {
   position: absolute;
-  bottom: 100%;
-  left: 50%;
-  transform: translateX(-50%) translateY(4px);
-  background: #f4f7fb;
-  color: #1a1d22;
-  padding: 0.25rem 0.55rem;
-  border-radius: 6px;
-  font-size: 0.7rem;
-  white-space: nowrap;
+  inset: 0;
+  background: #fff;
   opacity: 0;
-  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+.pullstage.is-live .pullstage__flash {
+  animation: pullstage-flash 0.4s ease-out forwards;
+}
+@keyframes pullstage-flash {
+  0% { opacity: 0; }
+  12% { opacity: 0.95; }
+  100% { opacity: 0; }
+}
+.pullstage__rays {
+  position: absolute;
+  inset: -60%;
+  background: repeating-conic-gradient(from 0deg, var(--r-color, #ffde59) 0deg 5deg, transparent 5deg 18deg);
+  opacity: 0;
+}
+.pullstage.is-live .pullstage__rays {
+  animation: pullstage-rays 1.2s ease-out forwards;
+}
+@keyframes pullstage-rays {
+  0% { opacity: 0; scale: 0.15; rotate: 0deg; }
+  18% { opacity: 0.8; }
+  100% { opacity: 0; scale: 1.7; rotate: 50deg; }
+}
+.pullstage__particles {
+  position: absolute;
+  inset: 0;
   pointer-events: none;
 }
-
-.pet__bubble::after {
-  content: "";
-  position: absolute;
-  top: 100%;
-  left: 50%;
-  transform: translateX(-50%);
-  border: 5px solid transparent;
-  border-top-color: #f4f7fb;
-}
-
-.pet--talking .pet__bubble {
-  opacity: 1;
-  transform: translateX(-50%) translateY(0);
-}
-
-/* 이름표 */
-.pet__name {
-  position: absolute;
-  top: 100%;
-  left: 50%;
-  transform: translateX(-50%);
-  margin-top: 2px;
-  font-size: 8px;
-  color: var(--text-muted);
-  background: rgba(10, 12, 16, 0.55);
-  padding: 1px 4px;
-  border-radius: 4px;
-  white-space: nowrap;
-}
-
-.pet:focus-visible .pet__body {
-  outline: var(--focus-ring);
-  outline-offset: 3px;
-}
-
-/* 바닥 그림자: 캐릭터가 뜨고 내려앉는 걸 눈으로 알 수 있게 해서 입체감을 준다.
-   sprite보다 먼저 그려서(DOM 순서상 body 안 첫 번째 자식) 항상 캐릭터 뒤에 깔린다. */
-.pet__shadow {
+.spark {
   position: absolute;
   left: 50%;
-  bottom: -3px;
-  width: 70%;
-  height: 4px;
-  background: radial-gradient(closest-side, rgba(0, 0, 0, 0.55), transparent);
-  transform: translateX(-50%);
-  border-radius: 50%;
+  top: 50%;
+  font-size: 13px;
+  color: var(--r-color, #ffde59);
+  opacity: 0;
+  text-shadow: 0 0 6px var(--r-color, #ffde59);
+}
+.pullstage.is-live .spark {
+  animation: spark-fly 0.85s ease-out forwards;
+  animation-delay: var(--d, 0s);
+}
+@keyframes spark-fly {
+  0% { opacity: 0; translate: 0 0; scale: 0.3; }
+  18% { opacity: 1; scale: 1; }
+  100% { opacity: 0; translate: var(--tx, 60px) var(--ty, -60px); scale: 0.9; }
+}
+.pullstage__card {
+  position: relative;
+  text-align: center;
+  scale: 0;
+  z-index: 1;
+}
+.pullstage.is-live .pullstage__card {
+  animation: card-punch 0.5s cubic-bezier(0.22, 1.7, 0.4, 1) 0.22s forwards;
+}
+@keyframes card-punch {
+  0% { scale: 0; rotate: -22deg; opacity: 0; }
+  65% { scale: 1.22; rotate: 6deg; opacity: 1; }
+  100% { scale: 1; rotate: 0deg; }
+}
+.pullstage__icon {
+  font-size: 44px;
+  line-height: 1;
+  filter: drop-shadow(0 0 10px var(--r-color, #ffde59));
+}
+.pullstage__name {
+  margin-top: 6px;
+  font-size: 13.5px;
+  font-weight: 800;
+}
+.pullstage__rarity {
+  display: inline-block;
+  margin-top: 4px;
+  font-size: 10.5px;
+  font-weight: 800;
+  padding: 2px 8px;
+  border-radius: 999px;
+  color: #08131a;
+  background: var(--r-color, #9aa4b5);
 }
 
-/* 통통 튀며 좌우로 살짝 뒤뚱거리는 걷기 모션 (찌그러짐 효과로 탄력감을 준다) */
-@keyframes pet-bounce {
-  0% {
-    translate: 0 0;
-    scale: 1 1;
-    rotate: -3deg;
-  }
-  25% {
-    translate: 0 -7px;
-    scale: 1.04 0.96;
-    rotate: 0deg;
-  }
-  50% {
-    translate: 0 0;
-    scale: 1 1;
-    rotate: 3deg;
-  }
-  75% {
-    translate: 0 -7px;
-    scale: 1.04 0.96;
-    rotate: 0deg;
-  }
-  100% {
-    translate: 0 0;
-    scale: 1 1;
-    rotate: -3deg;
-  }
+@keyframes gacha-shake {
+  0%, 100% { translate: 0 0; }
+  20% { translate: -5px 0; }
+  40% { translate: 5px 0; }
+  60% { translate: -3px 0; }
+  80% { translate: 3px 0; }
+}
+#view-gacha.is-shaking {
+  animation: gacha-shake 0.4s ease-in-out;
 }
 
-.pet--walking .pet__body {
-  animation: pet-bounce 0.7s ease-in-out infinite;
+.gacha-sub {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #9aa4b5;
+  margin: 10px 0 6px;
+  font-weight: 700;
 }
 
-@keyframes pet-shadow-walk {
-  0%,
-  50%,
-  100% {
-    scale: 1;
-    opacity: 0.5;
-  }
-  25%,
-  75% {
-    scale: 0.7;
-    opacity: 0.25;
-  }
+.slots {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.slot {
+  background: #1b2028;
+  border: 1px solid #2c3340;
+  border-radius: 9px;
+  padding: 8px 4px;
+  text-align: center;
+  cursor: pointer;
+  font-family: inherit;
+  color: #eef1f6;
+}
+.slot:hover {
+  border-color: #384154;
+}
+.slot__icon {
+  font-size: 22px;
+  line-height: 1.1;
+}
+.slot__icon--empty {
+  color: #3a4150;
+}
+.slot__label {
+  font-size: 10px;
+  color: #9aa4b5;
+  margin-top: 3px;
 }
 
-.pet--walking .pet__shadow {
-  animation: pet-shadow-walk 0.7s ease-in-out infinite;
+.picker {
+  position: fixed;
+  inset: 0;
+  background: rgba(8, 10, 14, 0.7);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 30;
 }
-
-@keyframes pet-pop {
-  0% {
-    scale: 1;
-  }
-  40% {
-    scale: 1.18;
-  }
-  100% {
-    scale: 1;
-  }
+.picker__panel {
+  width: 100%;
+  max-width: 420px;
+  background: #14171d;
+  border-top: 1px solid #2c3340;
+  border-radius: 14px 14px 0 0;
+  padding: 12px;
+  max-height: 320px;
+  overflow-y: auto;
 }
-
-.pet--excited .pet__body {
-  animation: pet-pop 0.4s ease-in-out;
+.picker__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
 }
-
-/* 반응할 때(클릭/근접) 팔을 번쩍 들어올리는 "만세" 동작. 팔 사각형은 어깨
-   위치(고정된 회전축)를 중심으로 도는 것만으로는 이동 폭이 작아 "번쩍 든"
-   느낌이 잘 안 나서, 회전과 함께 위쪽으로 이동(translate)도 같이 준다. */
-@keyframes pet-arm-cheer-left {
-  0% {
-    rotate: -100deg;
-    translate: 0 0;
-  }
-  40% {
-    rotate: -60deg;
-    translate: -20% -320%;
-  }
-  100% {
-    rotate: -100deg;
-    translate: 0 0;
-  }
+.picker__head h3 {
+  font-size: 13px;
+  margin: 0;
 }
-
-@keyframes pet-arm-cheer-right {
-  0% {
-    rotate: 100deg;
-    translate: 0 0;
-  }
-  40% {
-    rotate: 60deg;
-    translate: 20% -320%;
-  }
-  100% {
-    rotate: 100deg;
-    translate: 0 0;
-  }
+.picker__close {
+  background: transparent;
+  border: none;
+  color: #9aa4b5;
+  font-size: 14px;
+  cursor: pointer;
 }
-
-.pet--excited .pet__limb--arm.pet__limb--left {
-  animation: pet-arm-cheer-left 0.4s ease-in-out;
+.picker__grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
 }
-
-.pet--excited .pet__limb--arm.pet__limb--right {
-  animation: pet-arm-cheer-right 0.4s ease-in-out;
+.picker__item {
+  background: #1b2028;
+  border: 2px solid var(--r-color, #2c3340);
+  border-radius: 9px;
+  padding: 8px 4px;
+  text-align: center;
+  cursor: pointer;
+  color: #eef1f6;
+  font-family: inherit;
+  position: relative;
 }
-
-/* 앉기/낮잠: 제자리에서 천천히 숨쉬듯 움직인다 */
-@keyframes pet-breathe {
-  0%,
-  100% {
-    scale: 1;
-  }
-  50% {
-    scale: 1.04;
-  }
+.picker__item.is-equipped {
+  outline: 2px solid #5cff8f;
+  outline-offset: 1px;
 }
-
-.pet--sitting .pet__body,
-.pet--sleeping .pet__body {
-  animation: pet-breathe 2.4s ease-in-out infinite;
+.picker__item.is-locked {
+  opacity: 0.35;
+  cursor: not-allowed;
 }
-
-/* 앉아있을 때는 팔을 늘어뜨린 채로 아주 살짝만 흔들어 숨쉬는 느낌을 준다 */
-@keyframes pet-arm-idle-left {
-  0%,
-  100% {
-    rotate: -104deg;
-  }
-  50% {
-    rotate: -96deg;
-  }
-}
-
-@keyframes pet-arm-idle-right {
-  0%,
-  100% {
-    rotate: 104deg;
-  }
-  50% {
-    rotate: 96deg;
-  }
-}
-
-.pet--sitting .pet__limb--arm.pet__limb--left {
-  animation: pet-arm-idle-left 2.4s ease-in-out infinite;
-}
-
-.pet--sitting .pet__limb--arm.pet__limb--right {
-  animation: pet-arm-idle-right 2.4s ease-in-out infinite;
-}
-
-/* 낮잠 중 위로 떠오르며 사라지는 Zzz 표시 */
-.pet__zzz {
+.picker__item .icon { font-size: 20px; display: block; }
+.picker__item .name { font-size: 9.5px; margin-top: 3px; display: block; color: #9aa4b5; }
+.picker__item .count {
   position: absolute;
-  bottom: 85%;
-  right: -4px;
+  top: 2px;
+  right: 4px;
   font-size: 9px;
-  color: var(--text-muted);
-  opacity: 0;
-  pointer-events: none;
+  color: #6b7280;
+}
+.picker__unequip {
+  display: block;
+  width: 100%;
+  margin-top: 10px;
+  background: transparent;
+  border: 1px solid #2c3340;
+  color: #9aa4b5;
+  border-radius: 8px;
+  padding: 8px;
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
 }
 
-@keyframes pet-zzz-float {
-  0% {
-    translate: 0 0;
-    opacity: 0.15;
-  }
-  50% {
-    opacity: 1;
-  }
-  100% {
-    translate: 0 -10px;
-    opacity: 0;
-  }
-}
-
-.pet--sleeping .pet__zzz {
-  opacity: 1;
-  animation: pet-zzz-float 1.8s ease-in-out infinite;
-}
-
-/* 점프: 제자리에서 한 번 통통 튀어 오른다 */
-@keyframes pet-jump {
-  0% {
-    translate: 0 0;
-    scale: 1 1;
-  }
-  30% {
-    translate: 0 -16px;
-    scale: 0.95 1.08;
-  }
-  55% {
-    translate: 0 -14px;
-    scale: 1.06 0.92;
-  }
-  100% {
-    translate: 0 0;
-    scale: 1 1;
-  }
-}
-
-.pet--jumping .pet__body {
-  animation: pet-jump 0.5s ease-out 1;
-}
-
-/* 점프할 때 팔을 위로 번쩍 뻗어 도약하는 느낌을 준다(몸통 점프 타이밍에 맞춤) */
-@keyframes pet-arm-jump-left {
-  0% {
-    rotate: -100deg;
-    translate: 0 0;
-  }
-  30% {
-    rotate: -60deg;
-    translate: -20% -320%;
-  }
-  55% {
-    rotate: -70deg;
-    translate: -16% -280%;
-  }
-  100% {
-    rotate: -100deg;
-    translate: 0 0;
-  }
-}
-
-@keyframes pet-arm-jump-right {
-  0% {
-    rotate: 100deg;
-    translate: 0 0;
-  }
-  30% {
-    rotate: 60deg;
-    translate: 20% -320%;
-  }
-  55% {
-    rotate: 70deg;
-    translate: 16% -280%;
-  }
-  100% {
-    rotate: 100deg;
-    translate: 0 0;
-  }
-}
-
-.pet--jumping .pet__limb--arm.pet__limb--left {
-  animation: pet-arm-jump-left 0.5s ease-out 1;
-}
-
-.pet--jumping .pet__limb--arm.pet__limb--right {
-  animation: pet-arm-jump-right 0.5s ease-out 1;
-}
-
-@keyframes pet-shadow-jump {
-  0%,
-  100% {
-    scale: 1;
-    opacity: 0.5;
-  }
-  40% {
-    scale: 0.45;
-    opacity: 0.18;
-  }
-}
-
-.pet--jumping .pet__shadow {
-  animation: pet-shadow-jump 0.5s ease-out 1;
-}
-
-/* 빙글 돌기: 제자리에서 한 바퀴 돈다 */
-@keyframes pet-spin {
-  0% {
-    rotate: 0deg;
-  }
-  100% {
-    rotate: 360deg;
-  }
-}
-
-.pet--spinning .pet__body {
-  animation: pet-spin 0.6s ease-in-out 1;
-}
-
-/* 빙글 돌 때 팔을 옆으로 활짝 뻗었다가 돌아오게 해서 회전에 힘을 싣는다 */
-@keyframes pet-arm-spin-left {
-  0%,
-  100% {
-    rotate: -100deg;
-  }
-  50% {
-    rotate: -10deg;
-  }
-}
-
-@keyframes pet-arm-spin-right {
-  0%,
-  100% {
-    rotate: 100deg;
-  }
-  50% {
-    rotate: 10deg;
-  }
-}
-
-.pet--spinning .pet__limb--arm.pet__limb--left {
-  animation: pet-arm-spin-left 0.6s ease-in-out 1;
-}
-
-.pet--spinning .pet__limb--arm.pet__limb--right {
-  animation: pet-arm-spin-right 0.6s ease-in-out 1;
-}
-
-@keyframes blink {
-  0%,
-  49% {
-    opacity: 1;
-  }
-  50%,
-  100% {
-    opacity: 0;
-  }
-}
-
-/* -----------------------------
-   모션 감소 환경 배려
-   ----------------------------- */
-@media (prefers-reduced-motion: reduce) {
-  .pet,
-  .pet__body,
-  .pet__bubble,
-  .pet__zzz,
-  .pet__shadow,
-  .pet__limb,
-  .app-header__cursor {
-    animation: none !important;
-    transition: none !important;
+@media (max-width: 480px) {
+  .panel {
+    width: calc(100vw - 20px);
+    right: 10px;
   }
 }
