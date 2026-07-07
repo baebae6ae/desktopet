@@ -128,13 +128,13 @@ const coinBalanceEl = document.getElementById("coin-balance");
 const tabCoinsEl = document.getElementById("tab-coins");
 const pullBtn = document.getElementById("pull-btn");
 const gachaHintEl = document.getElementById("gacha-hint");
-const reelEl = document.getElementById("reel");
-const reelTrackEl = document.getElementById("reel-track");
-const revealEl = document.getElementById("reveal");
-const revealBurstEl = document.getElementById("reveal-burst");
-const revealIconEl = document.getElementById("reveal-icon");
-const revealNameEl = document.getElementById("reveal-name");
-const revealRarityEl = document.getElementById("reveal-rarity");
+const gachaViewEl = document.getElementById("view-gacha");
+const pullstageEl = document.getElementById("pullstage");
+const particlesEl = document.getElementById("particles");
+const pullCardEl = document.getElementById("pullcard");
+const pullIconEl = document.getElementById("pull-icon");
+const pullNameEl = document.getElementById("pull-name");
+const pullRarityEl = document.getElementById("pull-rarity");
 const slotsEl = document.getElementById("slots");
 
 function setCoinDisplay(coins) {
@@ -222,61 +222,56 @@ function openPicker(slot) {
   });
 }
 
-/* ---- 뽑기 연출: 슬롯머신처럼 빠르게 돌다가 결과에서 딱 멈춘다 ---- */
-const REEL_CELL_COUNT = 26;
-const REEL_TARGET_INDEX = 20;
+/* ---- 뽑기 연출: 슬롯머신 릴이 아니라, 버튼을 누르면 잠깐 예열되다가
+   화면 중앙에서 빛이 확 터지고 아이템이 튀어나오는 "상자 개봉" 연출 ---- */
+const SPARK_GLYPHS = ["✦", "★", "✧", "✹", "•"];
 
-function buildReelCells(finalItem) {
-  reelTrackEl.innerHTML = "";
-  reelTrackEl.style.transition = "none";
-  reelTrackEl.style.transform = "translateX(0)";
-  for (let i = 0; i < REEL_CELL_COUNT; i++) {
-    const item = i === REEL_TARGET_INDEX ? finalItem : gacha.ITEMS[Math.floor(Math.random() * gacha.ITEMS.length)];
-    const cell = document.createElement("div");
-    cell.className = "reel__cell";
-    cell.style.setProperty("--r-color", gacha.RARITY[item.rarity].color);
-    cell.textContent = item.icon;
-    reelTrackEl.appendChild(cell);
+function buildParticles(color) {
+  particlesEl.innerHTML = "";
+  const count = 14;
+  for (let i = 0; i < count; i++) {
+    const angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.4;
+    const dist = 55 + Math.random() * 35;
+    const span = document.createElement("span");
+    span.className = "spark";
+    span.textContent = SPARK_GLYPHS[Math.floor(Math.random() * SPARK_GLYPHS.length)];
+    span.style.setProperty("--tx", `${Math.cos(angle) * dist}px`);
+    span.style.setProperty("--ty", `${Math.sin(angle) * dist}px`);
+    span.style.setProperty("--d", `${Math.random() * 0.15}s`);
+    span.style.setProperty("--r-color", color);
+    particlesEl.appendChild(span);
   }
 }
 
-function spinReel(finalItem) {
+function playPullFx(item, isNew) {
   return new Promise((resolve) => {
-    buildReelCells(finalItem);
-    reelEl.hidden = false;
-    revealEl.hidden = true;
-    // 강제 리플로우 후 목표 칸의 실제 좌표를 측정해서 그 칸이 정확히 포인터(중앙) 아래 오도록 이동한다.
-    // eslint-disable-next-line no-unused-expressions
-    reelTrackEl.offsetHeight;
-    const targetCell = reelTrackEl.children[REEL_TARGET_INDEX];
-    const cellCenter = targetCell.offsetLeft + targetCell.offsetWidth / 2;
-    requestAnimationFrame(() => {
-      reelTrackEl.style.transition = "transform 1.9s cubic-bezier(0.1, 0.85, 0.15, 1)";
-      reelTrackEl.style.transform = `translateX(-${cellCenter}px)`;
-    });
-    setTimeout(resolve, 1950);
-  });
-}
+    const rarity = gacha.RARITY[item.rarity];
+    pullstageEl.style.setProperty("--r-color", rarity.color);
+    pullstageEl.classList.remove("is-live");
+    pullIconEl.textContent = item.icon;
+    pullNameEl.textContent = `${item.name}${isNew ? " (NEW!)" : ""}`;
+    pullRarityEl.textContent = rarity.label;
+    buildParticles(rarity.color);
+    pullstageEl.hidden = false;
 
-function showReveal(item, isNew) {
-  reelEl.hidden = true;
-  revealEl.hidden = false;
-  revealEl.classList.remove("is-live");
-  const rarity = gacha.RARITY[item.rarity];
-  revealEl.style.setProperty("--r-color", rarity.color);
-  revealIconEl.textContent = item.icon;
-  revealNameEl.textContent = `${item.name}${isNew ? " (NEW!)" : ""}`;
-  revealRarityEl.textContent = rarity.label;
-  // reflow 후 클래스 추가해야 애니메이션이 다시 재생된다
-  void revealEl.offsetWidth;
-  revealEl.classList.add("is-live");
+    // 리플로우 후 클래스를 추가해야 애니메이션이 다시 처음부터 재생된다
+    void pullstageEl.offsetWidth;
+    pullstageEl.classList.add("is-live");
+
+    if (item.rarity === "rare" || item.rarity === "epic") {
+      gachaViewEl.classList.remove("is-shaking");
+      void gachaViewEl.offsetWidth;
+      gachaViewEl.classList.add("is-shaking");
+    }
+    setTimeout(resolve, 1000);
+  });
 }
 
 pullBtn.addEventListener("click", async () => {
   pullBtn.disabled = true;
   pullBtn.classList.add("is-spinning");
   gachaHintEl.textContent = "";
-  revealEl.hidden = true;
+  pullstageEl.hidden = true;
 
   const result = await gacha.pullGacha();
   if (!result.ok) {
@@ -285,9 +280,10 @@ pullBtn.addEventListener("click", async () => {
     setCoinDisplay(result.coins);
     return;
   }
-
-  await spinReel(result.item);
-  showReveal(result.item, result.isNew);
-  pullBtn.classList.remove("is-spinning");
   setCoinDisplay(result.coins);
+
+  // 결과는 이미 정해졌지만, 잠깐 예열 텀을 둬야 "짠!" 하고 터지는 느낌이 산다.
+  await new Promise((r) => setTimeout(r, 420));
+  pullBtn.classList.remove("is-spinning");
+  await playPullFx(result.item, result.isNew);
 });
