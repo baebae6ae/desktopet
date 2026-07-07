@@ -20,13 +20,14 @@
   const APP_URL = SITE + "/app.html";
 
   // ---- 모듈/스타일 로드 (확장 리소스를 dynamic import) ----
-  let sprites, questions, share, guide, css;
+  let sprites, questions, share, guide, gacha, css;
   try {
-    [sprites, questions, share, guide, css] = await Promise.all([
+    [sprites, questions, share, guide, gacha, css] = await Promise.all([
       import(url("vendor/sprites.js")),
       import(url("vendor/questions.js")),
       import(url("vendor/share.js")),
       import(url("vendor/guideBuilder.js")),
+      import(url("vendor/gacha.js")),
       fetch(url("content/pet.css")).then((r) => r.text()),
     ]);
   } catch (err) {
@@ -114,6 +115,7 @@
   shadowEl.className = "pet__shadow";
   bodyEl.appendChild(shadowEl);
 
+  const limbEls = {}; // { armLeft, armRight, legLeft, legRight } — 가챠 장착템(팔/다리)을 붙일 자리
   for (const spec of sprites.buildLimbs(speciesDef, sprite)) {
     const limb = document.createElement("div");
     limb.className = `pet__limb pet__limb--${spec.part} pet__limb--${spec.side}`;
@@ -123,6 +125,7 @@
     limb.style.top = `${spec.topPct}%`;
     limb.style.backgroundColor = speciesDef.colors.b;
     bodyEl.appendChild(limb);
+    limbEls[spec.part + spec.side[0].toUpperCase() + spec.side.slice(1)] = limb;
   }
 
   const svgEl = buildSpriteSvg(sprite);
@@ -152,6 +155,42 @@
   zzzEl.className = "pet__zzz";
   zzzEl.textContent = "Zzz";
   bodyEl.appendChild(zzzEl);
+
+  // ---- 가챠로 뽑은 장착템 표시 ----
+  // 팔/다리는 해당 limb div의 자식으로 붙여서 회전/위치를 그대로 물려받고,
+  // 머리/얼굴/상체/하체는 몸통 기준 퍼센트 좌표로 얹는다.
+  const GEAR_SLOTS_ON_BODY = ["head", "face", "upperBody", "lowerBody"];
+  const GEAR_LIMB_KEYS = { arm: ["armLeft", "armRight"], legs: ["legLeft", "legRight"] };
+  function renderGear(equipped) {
+    bodyEl.querySelectorAll(".pet__gear").forEach((el) => el.remove());
+    for (const el of Object.values(limbEls)) {
+      const icon = el.querySelector(".pet__gear-icon");
+      if (icon) icon.remove();
+    }
+    if (!equipped) return;
+    for (const slot of gacha.SLOTS) {
+      const itemId = equipped[slot];
+      if (!itemId) continue;
+      const item = gacha.getItem(itemId);
+      if (!item) continue;
+      if (GEAR_LIMB_KEYS[slot]) {
+        for (const key of GEAR_LIMB_KEYS[slot]) {
+          const limb = limbEls[key];
+          if (!limb) continue;
+          const icon = document.createElement("span");
+          icon.className = "pet__gear-icon";
+          icon.textContent = item.icon;
+          limb.appendChild(icon);
+        }
+      } else if (GEAR_SLOTS_ON_BODY.includes(slot)) {
+        const gear = document.createElement("div");
+        gear.className = `pet__gear pet__gear--${slot}`;
+        gear.textContent = item.icon;
+        bodyEl.appendChild(gear);
+      }
+    }
+  }
+  gacha.getGachaState().then((s) => renderGear(s.equipped));
 
   const bubbleEl = document.createElement("div");
   bubbleEl.className = "pet__bubble";
@@ -678,6 +717,8 @@
       cta.addEventListener("click", () => {
         const frag = share.encodeAnswers(answers); // "s=..."
         window.open(`${APP_URL}#${frag}`, "_blank", "noopener");
+        gacha.addCoins(gacha.EARN_PER_PROMPT);
+        spawnFx(`+${gacha.EARN_PER_PROMPT} 코인 🪙`);
       });
       bodyBox.appendChild(cta);
 
@@ -700,6 +741,10 @@
     }
     if (changes.allowedSites && !isSiteAllowed(changes.allowedSites.newValue)) {
       host.remove();
+    }
+    // 팝업에서 가챠로 새 아이템을 장착/해제하면 새로고침 없이 바로 반영
+    if (changes.equipped) {
+      renderGear(changes.equipped.newValue);
     }
   });
 })();

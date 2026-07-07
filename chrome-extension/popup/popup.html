@@ -13,40 +13,72 @@
     </div>
   </header>
 
-  <label class="row">
-    <span>펫 표시</span>
-    <input type="checkbox" id="enabled" />
-  </label>
+  <div class="tabs" role="tablist">
+    <button class="tab" id="tab-settings" data-tab="settings" aria-selected="true">설정</button>
+    <button class="tab" id="tab-gacha" data-tab="gacha" aria-selected="false">
+      가챠 <span class="tab__coins" id="tab-coins">🪙 0</span>
+    </button>
+  </div>
 
-  <label class="row">
-    <span>캐릭터</span>
-    <select id="species">
-      <option value="cat">고양이</option>
-      <option value="robot">로봇</option>
-      <option value="ghost">유령</option>
-      <option value="slime">슬라임</option>
-      <option value="bear">곰돌이</option>
-    </select>
-  </label>
-
-  <section class="sites">
-    <h2>펫이 보일 사이트</h2>
-    <label class="row row--current" id="current-site-row" hidden>
-      <span id="current-site-host">-</span>
-      <input type="checkbox" id="current-site-toggle" />
+  <section id="view-settings" class="view">
+    <label class="row">
+      <span>펫 표시</span>
+      <input type="checkbox" id="enabled" />
     </label>
-    <ul class="site-list" id="site-list"></ul>
-    <p class="empty" id="site-list-empty">아직 허용한 사이트가 없어요. 위에서 켜보세요!</p>
+
+    <label class="row">
+      <span>캐릭터</span>
+      <select id="species">
+        <option value="cat">고양이</option>
+        <option value="robot">로봇</option>
+        <option value="ghost">유령</option>
+        <option value="slime">슬라임</option>
+        <option value="bear">곰돌이</option>
+      </select>
+    </label>
+
+    <section class="sites">
+      <h2>펫이 보일 사이트</h2>
+      <label class="row row--current" id="current-site-row" hidden>
+        <span id="current-site-host">-</span>
+        <input type="checkbox" id="current-site-toggle" />
+      </label>
+      <ul class="site-list" id="site-list"></ul>
+      <p class="empty" id="site-list-empty">아직 허용한 사이트가 없어요. 위에서 켜보세요!</p>
+    </section>
+
+    <p class="hint" id="hint"></p>
+
+    <a class="site" id="site" href="https://nocalhostmore.vercel.app/" target="_blank" rel="noopener">
+      프롬프트 생성 사이트 열기 →
+    </a>
+
+    <footer>펫을 <b>클릭</b>하면 질문이 시작돼요. <b>드래그</b>로 옮길 수 있어요.<br />프롬프트를 생성할 때마다 코인을 받아요!</footer>
   </section>
 
-  <p class="hint" id="hint"></p>
+  <section id="view-gacha" class="view" hidden>
+    <div class="gacha-head">
+      <div class="gacha-coins">🪙 <b id="coin-balance">0</b></div>
+      <button class="gacha-pull" id="pull-btn">가챠 뽑기 <span id="pull-cost">(50 🪙)</span></button>
+    </div>
+    <p class="hint" id="gacha-hint"></p>
 
-  <a class="site" id="site" href="https://nocalhostmore.vercel.app/" target="_blank" rel="noopener">
-    프롬프트 생성 사이트 열기 →
-  </a>
+    <div class="reel" id="reel" hidden>
+      <div class="reel__track" id="reel-track"></div>
+      <div class="reel__pointer"></div>
+    </div>
 
-  <footer>펫을 <b>클릭</b>하면 질문이 시작돼요. <b>드래그</b>로 옮길 수 있어요.</footer>
+    <div class="reveal" id="reveal" hidden>
+      <div class="reveal__burst" id="reveal-burst"></div>
+      <div class="reveal__icon" id="reveal-icon"></div>
+      <div class="reveal__name" id="reveal-name"></div>
+      <div class="reveal__rarity" id="reveal-rarity"></div>
+    </div>
 
-  <script src="popup.js"></script>
+    <h2 class="gacha-sub">보관함 · 장착</h2>
+    <div class="slots" id="slots"></div>
+  </section>
+
+  <script type="module" src="popup.js"></script>
 </body>
 </html>

@@ -113,6 +113,31 @@
   justify-content: center;
 }
 
+/* ---------------- 가챠 장착템 ---------------- */
+.pet__gear {
+  position: absolute;
+  left: 50%;
+  translate: -50% 0;
+  line-height: 1;
+  pointer-events: none;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.45));
+  z-index: 2;
+}
+.pet__gear--head { top: -16%; font-size: 15px; }
+.pet__gear--face { top: 32%; font-size: 11px; }
+.pet__gear--upperBody { top: 58%; font-size: 11px; }
+.pet__gear--lowerBody { top: 78%; font-size: 10px; }
+.pet__gear-icon {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  translate: -50% -50%;
+  font-size: 9px;
+  line-height: 1;
+  pointer-events: none;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.45));
+}
+
 .pet__zzz {
   position: absolute;
   bottom: 85%;

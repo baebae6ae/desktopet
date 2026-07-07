@@ -1,6 +1,6 @@
 * { box-sizing: border-box; }
 body {
-  width: 260px;
+  width: 300px;
   margin: 0;
   padding: 14px;
   background: #14171d;
@@ -125,4 +125,316 @@ footer {
   font-size: 11px;
   color: #9aa4b5;
   line-height: 1.5;
+}
+
+/* ---------------- 탭 ---------------- */
+.tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.tab {
+  flex: 1;
+  background: #1b2028;
+  border: 1px solid #2c3340;
+  color: #9aa4b5;
+  border-radius: 8px;
+  padding: 8px 6px;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.tab[aria-selected="true"] {
+  background: linear-gradient(135deg, #5cff8f, #37d0ff);
+  color: #08131a;
+  border-color: transparent;
+}
+.tab__coins {
+  font-size: 10.5px;
+  font-weight: 700;
+  opacity: 0.85;
+}
+
+/* ---------------- 가챠 ---------------- */
+.gacha-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.gacha-coins {
+  background: #1b2028;
+  border: 1px solid #2c3340;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
+  font-weight: 700;
+}
+.gacha-pull {
+  flex: 1;
+  background: linear-gradient(135deg, #ffb03c, #ff6b6b);
+  color: #1a0f00;
+  border: none;
+  border-radius: 9px;
+  padding: 10px 8px;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.gacha-pull:disabled {
+  background: #2c3340;
+  color: #6b7280;
+  cursor: not-allowed;
+}
+.gacha-pull.is-spinning {
+  animation: pull-btn-pulse 0.5s ease-in-out infinite;
+}
+@keyframes pull-btn-pulse {
+  0%, 100% { scale: 1; }
+  50% { scale: 1.04; }
+}
+
+.reel {
+  position: relative;
+  height: 64px;
+  margin: 4px 0 10px;
+  overflow: hidden;
+  border-radius: 10px;
+  background: repeating-linear-gradient(45deg, #0f1319, #0f1319 10px, #12161d 10px, #12161d 20px);
+  border: 1px solid #2c3340;
+}
+.reel__track {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  will-change: transform;
+}
+.reel__cell {
+  width: 56px;
+  height: 56px;
+  flex: 0 0 56px;
+  margin: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+  background: #1b2028;
+  border-radius: 8px;
+  border: 2px solid var(--r-color, #2c3340);
+}
+.reel__pointer {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  left: 50%;
+  width: 2px;
+  transform: translateX(-1px);
+  background: #ffde59;
+  box-shadow: 0 0 8px 2px rgba(255, 222, 89, 0.7);
+  pointer-events: none;
+}
+.reel__pointer::before,
+.reel__pointer::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  width: 0;
+  height: 0;
+  border: 6px solid transparent;
+  transform: translateX(-50%);
+}
+.reel__pointer::before {
+  top: -6px;
+  border-top: none;
+  border-bottom-color: #ffde59;
+}
+.reel__pointer::after {
+  bottom: -6px;
+  border-bottom: none;
+  border-top-color: #ffde59;
+}
+
+.reveal {
+  position: relative;
+  text-align: center;
+  padding: 14px 8px 16px;
+  margin-bottom: 6px;
+  border-radius: 10px;
+  overflow: hidden;
+}
+.reveal__burst {
+  position: absolute;
+  inset: -30%;
+  background: radial-gradient(closest-side, var(--r-color, #5cff8f), transparent 70%);
+  opacity: 0;
+}
+.reveal.is-live .reveal__burst {
+  animation: reveal-burst 0.7s ease-out;
+}
+@keyframes reveal-burst {
+  0% { opacity: 0; scale: 0.3; }
+  30% { opacity: 0.55; }
+  100% { opacity: 0; scale: 1.6; }
+}
+.reveal__icon {
+  position: relative;
+  font-size: 40px;
+  line-height: 1;
+}
+.reveal.is-live .reveal__icon {
+  animation: reveal-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+@keyframes reveal-pop {
+  0% { scale: 0.2; rotate: -20deg; opacity: 0; }
+  60% { scale: 1.25; rotate: 8deg; opacity: 1; }
+  100% { scale: 1; rotate: 0deg; }
+}
+.reveal__name {
+  position: relative;
+  margin-top: 6px;
+  font-size: 13.5px;
+  font-weight: 800;
+}
+.reveal__rarity {
+  position: relative;
+  display: inline-block;
+  margin-top: 4px;
+  font-size: 10.5px;
+  font-weight: 800;
+  padding: 2px 8px;
+  border-radius: 999px;
+  color: #08131a;
+  background: var(--r-color, #9aa4b5);
+}
+
+.gacha-sub {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #9aa4b5;
+  margin: 10px 0 6px;
+  font-weight: 700;
+}
+
+.slots {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.slot {
+  background: #1b2028;
+  border: 1px solid #2c3340;
+  border-radius: 9px;
+  padding: 8px 4px;
+  text-align: center;
+  cursor: pointer;
+  font-family: inherit;
+  color: #eef1f6;
+}
+.slot:hover {
+  border-color: #384154;
+}
+.slot__icon {
+  font-size: 22px;
+  line-height: 1.1;
+}
+.slot__icon--empty {
+  color: #3a4150;
+}
+.slot__label {
+  font-size: 10px;
+  color: #9aa4b5;
+  margin-top: 3px;
+}
+
+.picker {
+  position: fixed;
+  inset: 0;
+  background: rgba(8, 10, 14, 0.7);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 10;
+}
+.picker__panel {
+  width: 100%;
+  background: #14171d;
+  border-top: 1px solid #2c3340;
+  border-radius: 14px 14px 0 0;
+  padding: 12px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+.picker__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.picker__head h3 {
+  font-size: 13px;
+  margin: 0;
+}
+.picker__close {
+  background: transparent;
+  border: none;
+  color: #9aa4b5;
+  font-size: 14px;
+  cursor: pointer;
+}
+.picker__grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.picker__item {
+  background: #1b2028;
+  border: 2px solid var(--r-color, #2c3340);
+  border-radius: 9px;
+  padding: 8px 4px;
+  text-align: center;
+  cursor: pointer;
+  color: #eef1f6;
+  font-family: inherit;
+  position: relative;
+}
+.picker__item.is-equipped {
+  outline: 2px solid #5cff8f;
+  outline-offset: 1px;
+}
+.picker__item.is-locked {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.picker__item .icon { font-size: 20px; display: block; }
+.picker__item .name { font-size: 9.5px; margin-top: 3px; display: block; color: #9aa4b5; }
+.picker__item .count {
+  position: absolute;
+  top: 2px;
+  right: 4px;
+  font-size: 9px;
+  color: #6b7280;
+}
+.picker__unequip {
+  display: block;
+  width: 100%;
+  margin-top: 10px;
+  background: transparent;
+  border: 1px solid #2c3340;
+  color: #9aa4b5;
+  border-radius: 8px;
+  padding: 8px;
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
 }
