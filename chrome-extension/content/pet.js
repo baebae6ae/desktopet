@@ -79,14 +79,14 @@
 
   // ---- 캐릭터 DOM ----
   const SVG_NS = "http://www.w3.org/2000/svg";
-  function buildSpriteSvg(sprite) {
+  function buildSpriteSvg(rects, width, height) {
     const svg = document.createElementNS(SVG_NS, "svg");
     svg.setAttribute("class", "pet__sprite");
     svg.setAttribute("viewBox", `0 0 ${sprites.COLS} ${sprites.ROWS}`);
     svg.setAttribute("shape-rendering", "crispEdges");
-    svg.style.width = `${sprite.width}px`;
-    svg.style.height = `${sprite.height}px`;
-    for (const r of sprite.rects) {
+    svg.style.width = `${width}px`;
+    svg.style.height = `${height}px`;
+    for (const r of rects) {
       const rectEl = document.createElementNS(SVG_NS, "rect");
       rectEl.setAttribute("x", r.x);
       rectEl.setAttribute("y", r.y);
@@ -128,11 +128,30 @@
     limbEls[spec.part + spec.side[0].toUpperCase() + spec.side.slice(1)] = limb;
   }
 
-  const svgEl = buildSpriteSvg(sprite);
-  svgEl.style.setProperty("--sprite-scale", PET_SCALE);
-  svgEl.style.left = `${(sprite.width * (PET_SCALE - 1)) / 2}px`;
-  svgEl.style.top = `${(sprite.height * (PET_SCALE - 1)) / 2}px`;
-  bodyEl.appendChild(svgEl);
+  // 머리/얼굴/상체/하체 가챠 장착템은 별도 스티커가 아니라 이 SVG의 rect로
+  // 같이 그려서 캐릭터 실루엣 자체의 일부처럼(테두리까지) 보이게 한다.
+  const BODY_GEAR_SLOTS = ["head", "face", "upperBody", "lowerBody"];
+  function gearRectsFor(equipped) {
+    if (!equipped) return [];
+    const rects = [];
+    for (const slot of BODY_GEAR_SLOTS) {
+      const item = equipped[slot] && gacha.getItem(equipped[slot]);
+      if (item) rects.push(...gacha.gearRects(slot, item));
+    }
+    return rects;
+  }
+  let svgEl = null;
+  function mountSprite(equipped) {
+    const rects = sprite.rects.concat(gearRectsFor(equipped));
+    const next = buildSpriteSvg(rects, sprite.width, sprite.height);
+    next.style.setProperty("--sprite-scale", PET_SCALE);
+    next.style.left = `${(sprite.width * (PET_SCALE - 1)) / 2}px`;
+    next.style.top = `${(sprite.height * (PET_SCALE - 1)) / 2}px`;
+    if (svgEl) bodyEl.replaceChild(next, svgEl);
+    else bodyEl.appendChild(next);
+    svgEl = next;
+  }
+  mountSprite(null);
 
   const faceEl = document.createElement("div");
   faceEl.className = "pet__face";
@@ -156,41 +175,36 @@
   zzzEl.textContent = "Zzz";
   bodyEl.appendChild(zzzEl);
 
-  // ---- 가챠로 뽑은 장착템 표시 ----
-  // 팔/다리는 해당 limb div의 자식으로 붙여서 회전/위치를 그대로 물려받고,
-  // 머리/얼굴/상체/하체는 몸통 기준 퍼센트 좌표로 얹는다.
-  const GEAR_SLOTS_ON_BODY = ["head", "face", "upperBody", "lowerBody"];
+  // ---- 가챠로 뽑은 팔/다리 장착템 표시 ----
+  // 해당 limb div의 자식으로 붙여서 걷기/점프 등 회전·위치를 그대로 물려받고,
+  // 이모티콘 스티커 대신 실루엣과 같은 톤의 테두리를 두른 색 밴드로 그려서
+  // "얹은" 게 아니라 팔다리에 두른 것처럼 보이게 한다.
   const GEAR_LIMB_KEYS = { arm: ["armLeft", "armRight"], legs: ["legLeft", "legRight"] };
-  function renderGear(equipped) {
-    bodyEl.querySelectorAll(".pet__gear").forEach((el) => el.remove());
+  function renderLimbGear(equipped) {
     for (const el of Object.values(limbEls)) {
-      const icon = el.querySelector(".pet__gear-icon");
-      if (icon) icon.remove();
+      const band = el.querySelector(".pet__gear-band");
+      if (band) band.remove();
     }
     if (!equipped) return;
-    for (const slot of gacha.SLOTS) {
+    for (const [slot, keys] of Object.entries(GEAR_LIMB_KEYS)) {
       const itemId = equipped[slot];
-      if (!itemId) continue;
-      const item = gacha.getItem(itemId);
+      const item = itemId && gacha.getItem(itemId);
       if (!item) continue;
-      if (GEAR_LIMB_KEYS[slot]) {
-        for (const key of GEAR_LIMB_KEYS[slot]) {
-          const limb = limbEls[key];
-          if (!limb) continue;
-          const icon = document.createElement("span");
-          icon.className = "pet__gear-icon";
-          icon.textContent = item.icon;
-          limb.appendChild(icon);
-        }
-      } else if (GEAR_SLOTS_ON_BODY.includes(slot)) {
-        const gear = document.createElement("div");
-        gear.className = `pet__gear pet__gear--${slot}`;
-        gear.textContent = item.icon;
-        bodyEl.appendChild(gear);
+      for (const key of keys) {
+        const limb = limbEls[key];
+        if (!limb) continue;
+        const band = document.createElement("span");
+        band.className = "pet__gear-band";
+        band.style.backgroundColor = item.swatch;
+        limb.appendChild(band);
       }
     }
   }
-  gacha.getGachaState().then((s) => renderGear(s.equipped));
+  function applyEquipped(equipped) {
+    mountSprite(equipped);
+    renderLimbGear(equipped);
+  }
+  gacha.getGachaState().then((s) => applyEquipped(s.equipped));
 
   const bubbleEl = document.createElement("div");
   bubbleEl.className = "pet__bubble";
@@ -744,7 +758,7 @@
     }
     // 팝업에서 가챠로 새 아이템을 장착/해제하면 새로고침 없이 바로 반영
     if (changes.equipped) {
-      renderGear(changes.equipped.newValue);
+      applyEquipped(changes.equipped.newValue);
     }
   });
 })();

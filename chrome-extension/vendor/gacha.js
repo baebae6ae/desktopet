@@ -20,37 +20,58 @@ export const RARITY = {
   epic: { label: "에픽", weight: 8, color: "#ffb03c" },
 };
 
+// swatch: 픽셀아트로 캐릭터 몸에 실제로 "박아 넣을" 때 쓰는 대표 색상.
 export const ITEMS = [
-  { id: "head_cap", slot: "head", name: "캡모자", icon: "🧢", rarity: "common" },
-  { id: "head_ribbon", slot: "head", name: "리본", icon: "🎀", rarity: "common" },
-  { id: "head_tophat", slot: "head", name: "실크햇", icon: "🎩", rarity: "rare" },
-  { id: "head_crown", slot: "head", name: "왕관", icon: "👑", rarity: "epic" },
+  { id: "head_cap", slot: "head", name: "캡모자", icon: "🧢", rarity: "common", swatch: "#4a7dc7" },
+  { id: "head_ribbon", slot: "head", name: "리본", icon: "🎀", rarity: "common", swatch: "#ff6fa5" },
+  { id: "head_tophat", slot: "head", name: "실크햇", icon: "🎩", rarity: "rare", swatch: "#20242b" },
+  { id: "head_crown", slot: "head", name: "왕관", icon: "👑", rarity: "epic", swatch: "#ffd23c" },
 
-  { id: "face_glasses", slot: "face", name: "안경", icon: "👓", rarity: "common" },
-  { id: "face_mask", slot: "face", name: "마스크", icon: "😷", rarity: "common" },
-  { id: "face_shades", slot: "face", name: "선글라스", icon: "🕶️", rarity: "rare" },
-  { id: "face_monocle", slot: "face", name: "외알안경", icon: "🧐", rarity: "epic" },
+  { id: "face_glasses", slot: "face", name: "안경", icon: "👓", rarity: "common", swatch: "#3a4150" },
+  { id: "face_mask", slot: "face", name: "마스크", icon: "😷", rarity: "common", swatch: "#dfe6ee" },
+  { id: "face_shades", slot: "face", name: "선글라스", icon: "🕶️", rarity: "rare", swatch: "#111318" },
+  { id: "face_monocle", slot: "face", name: "외알안경", icon: "🧐", rarity: "epic", swatch: "#c9a24b" },
 
-  { id: "arm_band", slot: "arm", name: "밴드", icon: "🩹", rarity: "common" },
-  { id: "arm_glove", slot: "arm", name: "장갑", icon: "🧤", rarity: "common" },
-  { id: "arm_watch", slot: "arm", name: "손목시계", icon: "⌚", rarity: "rare" },
-  { id: "arm_ring", slot: "arm", name: "반지", icon: "💍", rarity: "epic" },
+  { id: "arm_band", slot: "arm", name: "밴드", icon: "🩹", rarity: "common", swatch: "#ff8a8a" },
+  { id: "arm_glove", slot: "arm", name: "장갑", icon: "🧤", rarity: "common", swatch: "#3a3f4a" },
+  { id: "arm_watch", slot: "arm", name: "손목시계", icon: "⌚", rarity: "rare", swatch: "#7d5a3a" },
+  { id: "arm_ring", slot: "arm", name: "반지", icon: "💍", rarity: "epic", swatch: "#ffd23c" },
 
-  { id: "body_vest", slot: "upperBody", name: "조끼", icon: "🦺", rarity: "common" },
-  { id: "body_tie", slot: "upperBody", name: "넥타이", icon: "👔", rarity: "common" },
-  { id: "body_scarf", slot: "upperBody", name: "목도리", icon: "🧣", rarity: "rare" },
-  { id: "body_cape", slot: "upperBody", name: "망토", icon: "🦸", rarity: "epic" },
+  { id: "body_vest", slot: "upperBody", name: "조끼", icon: "🦺", rarity: "common", swatch: "#f4b942" },
+  { id: "body_tie", slot: "upperBody", name: "넥타이", icon: "👔", rarity: "common", swatch: "#7a2e2e" },
+  { id: "body_scarf", slot: "upperBody", name: "목도리", icon: "🧣", rarity: "rare", swatch: "#c94f4f" },
+  { id: "body_cape", slot: "upperBody", name: "망토", icon: "🦸", rarity: "epic", swatch: "#5b3fae" },
 
-  { id: "lower_shorts", slot: "lowerBody", name: "반바지", icon: "🩳", rarity: "common" },
-  { id: "lower_belt", slot: "lowerBody", name: "벨트", icon: "👖", rarity: "common" },
-  { id: "lower_skirt", slot: "lowerBody", name: "치마", icon: "👗", rarity: "rare" },
-  { id: "lower_sash", slot: "lowerBody", name: "챔피언 띠", icon: "🎗️", rarity: "epic" },
+  { id: "lower_shorts", slot: "lowerBody", name: "반바지", icon: "🩳", rarity: "common", swatch: "#3a6ea5" },
+  { id: "lower_belt", slot: "lowerBody", name: "벨트", icon: "👖", rarity: "common", swatch: "#5a3b25" },
+  { id: "lower_skirt", slot: "lowerBody", name: "치마", icon: "👗", rarity: "rare", swatch: "#d16b9e" },
+  { id: "lower_sash", slot: "lowerBody", name: "챔피언 띠", icon: "🎗️", rarity: "epic", swatch: "#c9a227" },
 
-  { id: "legs_socks", slot: "legs", name: "양말", icon: "🧦", rarity: "common" },
-  { id: "legs_sandals", slot: "legs", name: "샌들", icon: "🩴", rarity: "common" },
-  { id: "legs_sneakers", slot: "legs", name: "운동화", icon: "👟", rarity: "rare" },
-  { id: "legs_boots", slot: "legs", name: "레인부츠", icon: "👢", rarity: "epic" },
+  { id: "legs_socks", slot: "legs", name: "양말", icon: "🧦", rarity: "common", swatch: "#e8e8ef" },
+  { id: "legs_sandals", slot: "legs", name: "샌들", icon: "🩴", rarity: "common", swatch: "#8a5a3a" },
+  { id: "legs_sneakers", slot: "legs", name: "운동화", icon: "👟", rarity: "rare", swatch: "#2e6fd6" },
+  { id: "legs_boots", slot: "legs", name: "레인부츠", icon: "👢", rarity: "epic", swatch: "#4a3222" },
 ];
+
+// ---- 몸에 "박아 넣는" 픽셀 배지 좌표 (32x32 그리드, sprites.js와 동일 단위) ----
+// 머리/얼굴/상체/하체는 캐릭터 실루엣과 같은 SVG에 rect로 합성해서, 별도 스티커가
+// 아니라 캐릭터 그림 자체의 일부처럼 보이게 한다(테두리도 실루엣과 같은 톤으로).
+const GEAR_OUTLINE = "#2b2b2b";
+export const GEAR_ANCHORS = {
+  head: { x: 11, y: 1, w: 10, h: 3 },
+  face: { x: 10, y: 11, w: 12, h: 2 },
+  upperBody: { x: 12, y: 20, w: 8, h: 3 },
+  lowerBody: { x: 12, y: 24, w: 8, h: 3 },
+};
+
+export function gearRects(slot, item) {
+  const a = GEAR_ANCHORS[slot];
+  if (!a || !item) return [];
+  return [
+    { x: a.x - 1, y: a.y - 1, w: a.w + 2, h: a.h + 2, color: GEAR_OUTLINE },
+    { x: a.x, y: a.y, w: a.w, h: a.h, color: item.swatch },
+  ];
+}
 
 export const PULL_COST = 50;
 export const EARN_PER_PROMPT = 20;
