@@ -583,9 +583,102 @@
 
   petEl.addEventListener("pointerenter", () => {
     if (state.mode === "roam" && Math.random() < 0.85) {
-      react(BUBBLE_MESSAGES[Math.floor(Math.random() * BUBBLE_MESSAGES.length)], "love");
+      const pool = BUBBLE_MESSAGES.concat(
+        bond.petName
+          ? [`${bond.petName} 출동 준비 완료!`, `${bond.petName}(이)는 오늘도 열일 중`, `${bond.petName}라고 불러줘서 좋아!`]
+          : []
+      );
+      react(pool[Math.floor(Math.random() * pool.length)], "love");
     }
   });
+
+  // ---- 애착 시스템: 이름/애정도/출석 ----
+  // 매일 처음 만나면 코인 보너스, 마우스로 문질러 쓰다듬으면 애정도가 쌓이고
+  // 레벨업마다 코인을 준다. 이름을 지어주면 대사에 이름이 섞여 나온다.
+  const bond = { petName: "", affection: 0 };
+  const PETTING_LINES = [
+    "헤헤, 간지러워!",
+    "기분 최고야~",
+    "더 쓰다듬어줘!",
+    "충전 완료! 힘이 난다!",
+    "이 맛에 데스크톱 사는 거지",
+  ];
+
+  async function onPetted() {
+    for (let i = 0; i < 3; i++) {
+      setTimeout(() => spawnFx("♥"), i * 130);
+    }
+    const prevLevel = gacha.affectionLevel(bond.affection);
+    bond.affection += 1;
+    const level = gacha.affectionLevel(bond.affection);
+    const linePool = PETTING_LINES.concat(bond.petName ? [`${bond.petName}, 행복해!`] : []);
+    setExpression("love");
+    bubbleEl.textContent = linePool[Math.floor(Math.random() * linePool.length)];
+    petEl.classList.add("pet--talking");
+    clearTimeout(state.reactTimer);
+    state.reactTimer = setTimeout(() => {
+      petEl.classList.remove("pet--talking");
+      setExpression(state.baseExpression);
+    }, 1600);
+    await chrome.storage.local.set({ affection: bond.affection });
+    if (level > prevLevel) {
+      spawnFx(`Lv.${level} 달성! +${gacha.LEVEL_REWARD} 🪙`, { impact: true });
+      gacha.addCoins(gacha.LEVEL_REWARD);
+    }
+  }
+
+  // 쓰다듬기 감지: 펫 위에서 마우스를 좌우로 문지르면(방향 전환 4회 이상 +
+  // 일정 거리) 1회 쓰다듬은 것으로 친다. 드래그로 옮기는 중에는 무시.
+  const rub = { dist: 0, flips: 0, lastX: null, lastSign: 0, lastMoveT: 0, cooldownUntil: 0 };
+  petEl.addEventListener("pointermove", (e) => {
+    if (drag || state.mode === "falling") return;
+    const now = performance.now();
+    if (now - rub.lastMoveT > 600) {
+      rub.dist = 0;
+      rub.flips = 0;
+      rub.lastSign = 0;
+      rub.lastX = e.clientX;
+    }
+    rub.lastMoveT = now;
+    if (rub.lastX != null) {
+      const dx = e.clientX - rub.lastX;
+      rub.dist += Math.abs(dx);
+      const sign = Math.sign(dx);
+      if (sign !== 0 && rub.lastSign !== 0 && sign !== rub.lastSign) rub.flips++;
+      if (sign !== 0) rub.lastSign = sign;
+    }
+    rub.lastX = e.clientX;
+    if (now >= rub.cooldownUntil && rub.flips >= 4 && rub.dist >= 60) {
+      rub.cooldownUntil = now + 2500;
+      rub.dist = 0;
+      rub.flips = 0;
+      onPetted();
+    }
+  });
+
+  (async () => {
+    const b = await chrome.storage.local.get(["petName", "affection", "lastDailyBonus", "firstMet"]);
+    bond.petName = typeof b.petName === "string" ? b.petName : "";
+    bond.affection = typeof b.affection === "number" ? b.affection : 0;
+
+    if (!b.firstMet) {
+      await chrome.storage.local.set({ firstMet: Date.now() });
+      setTimeout(() => {
+        react(`처음 만나서 반가워! 잘 부탁해 >_<`, "love");
+      }, 800);
+    }
+
+    const now = new Date();
+    const todayKey = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
+    if (b.lastDailyBonus !== todayKey) {
+      await chrome.storage.local.set({ lastDailyBonus: todayKey });
+      await gacha.addCoins(gacha.DAILY_BONUS);
+      setTimeout(() => {
+        spawnFx(`출석 보너스 +${gacha.DAILY_BONUS} 🪙`, { impact: true });
+        react("오늘도 와줬네! 선물이야!", "love");
+      }, b.firstMet ? 1200 : 3200);
+    }
+  })();
 
   // ---- 드래그 / 클릭 구분 ----
   let drag = null;
@@ -1025,6 +1118,10 @@
     // 팝업에서 가챠로 새 아이템을 장착/해제하면 새로고침 없이 바로 반영
     if (changes.equipped) {
       applyEquipped(changes.equipped.newValue);
+    }
+    // 팝업에서 이름을 바꾸면 대사에 바로 반영
+    if (changes.petName) {
+      bond.petName = changes.petName.newValue || "";
     }
   });
 })();

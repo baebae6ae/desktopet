@@ -76,6 +76,13 @@ export function gearRects(slot, item) {
 export const PULL_COST = 50;
 export const EARN_PER_PROMPT = 20;
 export const STARTER_COINS = 50;
+export const DAILY_BONUS = 30; // 하루 첫 방문 출석 보너스
+export const LEVEL_REWARD = 20; // 애정도 레벨업 보상
+export const AFFECTION_PER_LEVEL = 8; // 쓰다듬기 n번마다 레벨 1 상승
+
+export function affectionLevel(points) {
+  return Math.floor((points || 0) / AFFECTION_PER_LEVEL) + 1;
+}
 
 export function itemsBySlot(slot) {
   return ITEMS.filter((i) => i.slot === slot);

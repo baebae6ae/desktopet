@@ -322,9 +322,98 @@
 
   petEl.addEventListener("pointerenter", () => {
     if (state.mode === "roam" && Math.random() < 0.85) {
-      react(BUBBLE_MESSAGES[Math.floor(Math.random() * BUBBLE_MESSAGES.length)], "love");
+      const pool = BUBBLE_MESSAGES.concat(
+        bond.petName
+          ? [`${bond.petName} 출동 준비 완료!`, `${bond.petName}(이)는 오늘도 열일 중`, `${bond.petName}라고 불러줘서 좋아!`]
+          : []
+      );
+      react(pool[Math.floor(Math.random() * pool.length)], "love");
     }
   });
+
+  // ---- 애착 시스템: 이름/애정도/출석 (확장판 pet.js와 동일 로직) ----
+  const bond = { petName: "", affection: 0 };
+  const PETTING_LINES = [
+    "헤헤, 간지러워!",
+    "기분 최고야~",
+    "더 쓰다듬어줘!",
+    "충전 완료! 힘이 난다!",
+    "이 맛에 데스크톱 사는 거지",
+  ];
+
+  async function onPetted() {
+    for (let i = 0; i < 3; i++) {
+      setTimeout(() => spawnFx("♥"), i * 130);
+    }
+    const prevLevel = gacha.affectionLevel(bond.affection);
+    bond.affection += 1;
+    const level = gacha.affectionLevel(bond.affection);
+    const linePool = PETTING_LINES.concat(bond.petName ? [`${bond.petName}, 행복해!`] : []);
+    setExpression("love");
+    bubbleEl.textContent = linePool[Math.floor(Math.random() * linePool.length)];
+    petEl.classList.add("pet--talking");
+    clearTimeout(state.reactTimer);
+    state.reactTimer = setTimeout(() => {
+      petEl.classList.remove("pet--talking");
+      setExpression(state.baseExpression);
+    }, 1600);
+    await chrome.storage.local.set({ affection: bond.affection });
+    if (level > prevLevel) {
+      spawnFx(`Lv.${level} 달성! +${gacha.LEVEL_REWARD} 🪙`, { impact: true });
+      gacha.addCoins(gacha.LEVEL_REWARD);
+    }
+  }
+
+  const rub = { dist: 0, flips: 0, lastX: null, lastSign: 0, lastMoveT: 0, cooldownUntil: 0 };
+  petEl.addEventListener("pointermove", (e) => {
+    if (drag || state.mode === "falling") return;
+    const now = performance.now();
+    if (now - rub.lastMoveT > 600) {
+      rub.dist = 0;
+      rub.flips = 0;
+      rub.lastSign = 0;
+      rub.lastX = e.clientX;
+    }
+    rub.lastMoveT = now;
+    if (rub.lastX != null) {
+      const dx = e.clientX - rub.lastX;
+      rub.dist += Math.abs(dx);
+      const sign = Math.sign(dx);
+      if (sign !== 0 && rub.lastSign !== 0 && sign !== rub.lastSign) rub.flips++;
+      if (sign !== 0) rub.lastSign = sign;
+    }
+    rub.lastX = e.clientX;
+    if (now >= rub.cooldownUntil && rub.flips >= 4 && rub.dist >= 60) {
+      rub.cooldownUntil = now + 2500;
+      rub.dist = 0;
+      rub.flips = 0;
+      onPetted();
+    }
+  });
+
+  (async () => {
+    const b = await chrome.storage.local.get(["petName", "affection", "lastDailyBonus", "firstMet"]);
+    bond.petName = typeof b.petName === "string" ? b.petName : "";
+    bond.affection = typeof b.affection === "number" ? b.affection : 0;
+
+    if (!b.firstMet) {
+      await chrome.storage.local.set({ firstMet: Date.now() });
+      setTimeout(() => {
+        react(`처음 만나서 반가워! 잘 부탁해 >_<`, "love");
+      }, 800);
+    }
+
+    const now = new Date();
+    const todayKey = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
+    if (b.lastDailyBonus !== todayKey) {
+      await chrome.storage.local.set({ lastDailyBonus: todayKey });
+      await gacha.addCoins(gacha.DAILY_BONUS);
+      setTimeout(() => {
+        spawnFx(`출석 보너스 +${gacha.DAILY_BONUS} 🪙`, { impact: true });
+        react("오늘도 와줬네! 선물이야!", "love");
+      }, b.firstMet ? 1200 : 3200);
+    }
+  })();
 
   let drag = null;
   petEl.addEventListener("pointerdown", (e) => {
@@ -745,6 +834,28 @@
   speciesEl.addEventListener("change", () => {
     chrome.storage.local.set({ species: speciesEl.value });
     hintEl.textContent = "캐릭터 변경은 새로고침 후 적용돼요.";
+  });
+
+  const petNameEl = document.getElementById("pet-name");
+  const affectionEl = document.getElementById("affection");
+  function renderAffection(points) {
+    const p = typeof points === "number" ? points : 0;
+    affectionEl.textContent = `♥ ${p} · Lv.${gacha.affectionLevel(p)}`;
+  }
+  chrome.storage.local.get(["petName", "affection"]).then(({ petName, affection }) => {
+    petNameEl.value = typeof petName === "string" ? petName : "";
+    renderAffection(affection);
+  });
+  petNameEl.addEventListener("change", () => {
+    const name = petNameEl.value.trim().slice(0, 12);
+    petNameEl.value = name;
+    chrome.storage.local.set({ petName: name });
+    bond.petName = name;
+    hintEl.textContent = name ? `이제 "${name}"(이)라고 불러요!` : "";
+  });
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== "local") return;
+    if (changes.affection) renderAffection(changes.affection.newValue);
   });
 
   const tabButtons = document.querySelectorAll(".tab");

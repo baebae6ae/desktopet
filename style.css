@@ -180,6 +180,17 @@ select {
   padding: 4px 6px;
   font-family: inherit;
 }
+input[type="text"] {
+  background: #0f1319;
+  color: #eef1f6;
+  border: 1px solid #2c3340;
+  border-radius: 6px;
+  padding: 4px 6px;
+  font-family: inherit;
+  font-size: 12.5px;
+  width: 130px;
+}
+.affection { color: #ff9fb8; font-weight: 700; }
 
 .hint {
   font-size: 11px;

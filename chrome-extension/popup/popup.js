@@ -69,15 +69,27 @@ async function detectCurrentHost() {
   }
 }
 
+const petNameEl = document.getElementById("pet-name");
+const affectionEl = document.getElementById("affection");
+
+function renderAffection(points) {
+  const p = typeof points === "number" ? points : 0;
+  affectionEl.textContent = `♥ ${p} · Lv.${gacha.affectionLevel(p)}`;
+}
+
 async function init() {
-  const { enabled, species, allowedSites } = await chrome.storage.local.get([
+  const { enabled, species, allowedSites, petName, affection } = await chrome.storage.local.get([
     "enabled",
     "species",
     "allowedSites",
+    "petName",
+    "affection",
   ]);
   initial = { enabled: enabled !== false, species: species || "cat" };
   enabledEl.checked = initial.enabled;
   speciesEl.value = initial.species;
+  petNameEl.value = typeof petName === "string" ? petName : "";
+  renderAffection(affection);
 
   currentHost = await detectCurrentHost();
   if (currentHost) {
@@ -87,6 +99,13 @@ async function init() {
   renderSiteList(allowedSites);
 }
 init();
+
+petNameEl.addEventListener("change", () => {
+  const name = petNameEl.value.trim().slice(0, 12);
+  petNameEl.value = name;
+  chrome.storage.local.set({ petName: name });
+  showHint(name ? `이제 "${name}"(이)라고 불러요!` : "");
+});
 
 enabledEl.addEventListener("change", () => {
   chrome.storage.local.set({ enabled: enabledEl.checked });
@@ -170,6 +189,7 @@ refreshGachaView();
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== "local") return;
   if (changes.coins || changes.inventory || changes.equipped) refreshGachaView();
+  if (changes.affection) renderAffection(changes.affection.newValue);
 });
 
 /* ---- 아이템 픽커(슬롯 클릭 시 바텀시트) ---- */
