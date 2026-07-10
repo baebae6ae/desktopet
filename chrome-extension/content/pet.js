@@ -340,6 +340,29 @@
     state.y = floorTop();
   }
 
+  // 밟고 있는 실제 페이지 요소를 살짝 눌렀다 놓기 - Web Animations API라
+  // 인라인 스타일을 건드리지 않고 끝나면 원상복구되며, composite:"add"로
+  // 요소가 원래 갖고 있던 transform과도 충돌하지 않는다.
+  function bouncePlatform(el, strength) {
+    try {
+      el.animate(
+        [
+          { transform: "translateY(0)" },
+          { transform: `translateY(${strength}px)` },
+          { transform: "translateY(0)" },
+        ],
+        { duration: 220, easing: "ease-out", composite: "add" }
+      );
+    } catch (_) {
+      // 아주 오래된 브라우저 등에서 animate가 없어도 climb 자체는 계속되게
+    }
+  }
+
+  // 올라간 다음 하는 행동: 서성이기 외에도 요소와 "상호작용"하는 동작들.
+  // stomp(쿵쿵 발구르기)는 밟힌 요소가 실제로 들썩이고, peek(모서리에서
+  // 아래 내려다보기)/nap(그 위에서 낮잠)은 요소를 무대 삼아 논다.
+  const TOP_ACTIONS = ["pace", "pace", "stomp", "peek", "nap"];
+
   function stepClimb(dt) {
     const c = state.climb;
     if (!c) return;
@@ -369,9 +392,28 @@
         state.y = platformY;
         c.phase = "onTop";
         c.standTimer = 0;
-        c.standDuration = CLIMB.standMin + Math.random() * (CLIMB.standMax - CLIMB.standMin);
-        c.dir = Math.random() < 0.5 ? -1 : 1;
-        setActivityClass("pet--walking");
+        bouncePlatform(c.el, 3); // 착지 반동: 밟힌 요소가 움찔
+        c.topAction = TOP_ACTIONS[Math.floor(Math.random() * TOP_ACTIONS.length)];
+        if (c.topAction === "stomp") {
+          c.standDuration = 1.9;
+          c.stompTimer = 0;
+          setActivityClass("pet--hopping");
+          setExpression("excited");
+          spawnFx("쿵쿵!");
+        } else if (c.topAction === "peek") {
+          c.standDuration = Infinity; // 모서리 도착 후 리셋
+          c.peekSide = Math.random() < 0.5 ? -1 : 1;
+          c.peeking = false;
+          setActivityClass("pet--walking");
+        } else if (c.topAction === "nap") {
+          c.standDuration = 3 + Math.random() * 1.5;
+          setActivityClass("pet--sleeping");
+          setExpression("sleepy");
+        } else {
+          c.standDuration = CLIMB.standMin + Math.random() * (CLIMB.standMax - CLIMB.standMin);
+          c.dir = Math.random() < 0.5 ? -1 : 1;
+          setActivityClass("pet--walking");
+        }
       }
       place();
       return;
@@ -381,21 +423,61 @@
       c.standTimer += dt;
       const leftBound = clampX(platformLeft);
       const rightBound = clampX(Math.max(platformLeft, platformRight - W));
-      let nx = state.x + c.dir * CLIMB.walkSpeed * 0.8 * dt;
-      if (nx <= leftBound) {
-        nx = leftBound;
-        c.dir = 1;
-      } else if (nx >= rightBound) {
-        nx = rightBound;
-        c.dir = -1;
+
+      if (c.topAction === "stomp") {
+        // 제자리 쿵쿵: 발 구를 때마다 밟힌 요소가 실제로 들썩인다
+        c.stompTimer += dt;
+        if (c.stompTimer >= 0.45) {
+          c.stompTimer -= 0.45;
+          bouncePlatform(c.el, 3);
+          if (Math.random() < 0.5) spawnFx("쿵!");
+        }
+        state.y = platformY;
+        place();
+      } else if (c.topAction === "peek") {
+        if (!c.peeking) {
+          // 골라둔 쪽 모서리까지 걸어간 뒤, 아래를 빼꼼 내려다본다
+          const targetX = c.peekSide < 0 ? leftBound : rightBound;
+          const dir = targetX >= state.x ? 1 : -1;
+          petEl.classList.toggle("pet--flip", dir > 0);
+          let nx = state.x + dir * CLIMB.walkSpeed * dt;
+          if ((dir > 0 && nx >= targetX) || (dir < 0 && nx <= targetX)) {
+            nx = targetX;
+            c.peeking = true;
+            c.standTimer = 0;
+            c.standDuration = 1.8;
+            setActivityClass("pet--tilting");
+            setExpression("surprised");
+            spawnFx("!");
+          }
+          state.x = nx;
+        }
+        state.y = platformY;
+        place();
+      } else if (c.topAction === "nap") {
+        state.y = platformY;
+        place();
+      } else {
+        // pace: 요소 폭 안에서 좌우로 서성인다
+        let nx = state.x + c.dir * CLIMB.walkSpeed * 0.8 * dt;
+        if (nx <= leftBound) {
+          nx = leftBound;
+          c.dir = 1;
+        } else if (nx >= rightBound) {
+          nx = rightBound;
+          c.dir = -1;
+        }
+        petEl.classList.toggle("pet--flip", c.dir > 0);
+        state.x = nx;
+        state.y = platformY;
+        place();
       }
-      petEl.classList.toggle("pet--flip", c.dir > 0);
-      state.x = nx;
-      state.y = platformY;
-      place();
+
       if (c.standTimer >= c.standDuration) {
         c.phase = "descend";
         setActivityClass("pet--jumping");
+        setExpression("happy");
+        bouncePlatform(c.el, 2); // 뛰어내리는 반동
       }
       return;
     }
