@@ -246,6 +246,7 @@
     baseExpression: "happy",
     reactTimer: null,
     fallFxTimer: null,
+    climb: null, // 페이지 요소 위에 올라타 있는 동안의 진행 상태(stepClimb 참고)
   };
 
   function floorTop() {
@@ -273,7 +274,134 @@
     { type: "dance", cls: "pet--dancing", weight: 1.2, min: 2, max: 3.5, expr: "excited" },
     { type: "stretch", cls: "pet--stretching", weight: 1.2, min: 2, max: 3, expr: "happy" },
     { type: "wave", cls: "pet--waving", weight: 1.4, min: 1.5, max: 2.5, expr: "love" },
+    { type: "climb", cls: "pet--walking", weight: 1.6, min: 0, max: 0, expr: "excited" },
   ];
+
+  // ---- 페이지 요소 위에 잠깐 올라타기 ----
+  // 페이지 전체를 자유롭게 기어다니는 건 아니고, 걷기 중간에 끼는 짧은 이벤트: 근처에
+  // 보이는 큼직한 요소(버튼/이미지/구분선 등)로 걸어가 톡 뛰어올라 잠깐 그 위를
+  // 걷다가 다시 바닥으로 내려온다. 스크롤/리사이즈처럼 좌표가 흔들릴 수 있는
+  // 상황이 오면 복잡하게 재계산하지 않고 그냥 바닥으로 되돌린다(cancelClimb).
+  const CLIMB = {
+    selector: 'button, a, header, nav, footer, h1, h2, h3, hr, img, section, article, [role="button"], .btn',
+    minWidth: 64,
+    minLiftY: 20,
+    maxLiftY: 260,
+    maxReachX: 380,
+    maxScan: 500, // 요소가 아주 많은 페이지에서도 한 번에 너무 많이 스캔하지 않도록
+    walkSpeed: 30,
+    hopSpeed: 520,
+    standMin: 2,
+    standMax: 4,
+  };
+
+  function findClimbTarget() {
+    const floor = floorTop();
+    const petCenterX = state.x + W / 2;
+    const candidates = document.querySelectorAll(CLIMB.selector);
+    let best = null;
+    let bestDist = Infinity;
+    let scanned = 0;
+    for (const el of candidates) {
+      if (scanned++ > CLIMB.maxScan) break;
+      const r = el.getBoundingClientRect();
+      if (r.width < CLIMB.minWidth || r.height < 6) continue;
+      if (r.top < 0 || r.bottom > window.innerHeight || r.left < 0 || r.right > window.innerWidth) continue;
+      const liftY = floor - r.top;
+      if (liftY < CLIMB.minLiftY || liftY > CLIMB.maxLiftY) continue;
+      const cx = r.left + r.width / 2;
+      const dist = Math.abs(cx - petCenterX);
+      if (dist > CLIMB.maxReachX || dist >= bestDist) continue;
+      // 다른 요소(모달, 사이드바 등)에 가려진 자리면 제외
+      const probeX = Math.min(Math.max(cx, 0), window.innerWidth - 1);
+      const topEl = document.elementFromPoint(probeX, r.top + 2);
+      if (!topEl || !(topEl === el || el.contains(topEl))) continue;
+      best = { el, rect: r };
+      bestDist = dist;
+    }
+    return best;
+  }
+
+  function cancelClimb() {
+    if (!state.climb) return;
+    state.climb = null;
+    state.y = floorTop();
+  }
+
+  function stepClimb(dt) {
+    const c = state.climb;
+    if (!c) return;
+    const { left: platformLeft, right: platformRight, top: platformTop } = c.rect;
+    const platformY = Math.max(0, platformTop - H);
+    const midX = clampX((platformLeft + platformRight) / 2 - W / 2);
+
+    if (c.phase === "approach") {
+      const dir = midX >= state.x ? 1 : -1;
+      petEl.classList.toggle("pet--flip", dir > 0);
+      let nx = state.x + dir * CLIMB.walkSpeed * dt;
+      if ((dir > 0 && nx >= midX) || (dir < 0 && nx <= midX)) {
+        nx = midX;
+        c.phase = "rise";
+        setActivityClass("pet--jumping");
+        spawnFx("폴짝!");
+      }
+      state.x = nx;
+      state.y = floorTop();
+      place();
+      return;
+    }
+
+    if (c.phase === "rise") {
+      state.y -= CLIMB.hopSpeed * dt;
+      if (state.y <= platformY) {
+        state.y = platformY;
+        c.phase = "onTop";
+        c.standTimer = 0;
+        c.standDuration = CLIMB.standMin + Math.random() * (CLIMB.standMax - CLIMB.standMin);
+        c.dir = Math.random() < 0.5 ? -1 : 1;
+        setActivityClass("pet--walking");
+      }
+      place();
+      return;
+    }
+
+    if (c.phase === "onTop") {
+      c.standTimer += dt;
+      const leftBound = clampX(platformLeft);
+      const rightBound = clampX(Math.max(platformLeft, platformRight - W));
+      let nx = state.x + c.dir * CLIMB.walkSpeed * 0.8 * dt;
+      if (nx <= leftBound) {
+        nx = leftBound;
+        c.dir = 1;
+      } else if (nx >= rightBound) {
+        nx = rightBound;
+        c.dir = -1;
+      }
+      petEl.classList.toggle("pet--flip", c.dir > 0);
+      state.x = nx;
+      state.y = platformY;
+      place();
+      if (c.standTimer >= c.standDuration) {
+        c.phase = "descend";
+        setActivityClass("pet--jumping");
+      }
+      return;
+    }
+
+    if (c.phase === "descend") {
+      state.y += CLIMB.hopSpeed * dt;
+      const floor = floorTop();
+      if (state.y >= floor) {
+        state.y = floor;
+        state.climb = null;
+        place();
+        enterActivity(pickActivity());
+        return;
+      }
+      place();
+    }
+  }
+
   function pickActivity() {
     const total = ACTIVITIES.reduce((s, a) => s + a.weight, 0);
     let r = Math.random() * total;
@@ -284,6 +412,22 @@
     return ACTIVITIES[0];
   }
   function enterActivity(a) {
+    if (a.type === "climb") {
+      const target = findClimbTarget();
+      if (!target) {
+        enterActivity(ACTIVITIES[0]); // 근처에 밟을 만한 게 없으면 그냥 걷기
+        return;
+      }
+      state.activity = "climb";
+      state.activityTimer = 0;
+      state.activityDuration = Infinity; // stepClimb가 다 끝나면 알아서 다음 행동을 고른다
+      state.climb = { el: target.el, rect: target.rect, phase: "approach" };
+      setActivityClass("pet--walking");
+      state.baseExpression = "excited";
+      setExpression("excited");
+      return;
+    }
+    state.climb = null;
     state.activity = a.type;
     state.activityTimer = 0;
     state.activityDuration = a.min + Math.random() * (a.max - a.min);
@@ -363,6 +507,7 @@
     if (!drag.moved && dist > DRAG_THRESHOLD) {
       drag.moved = true;
       state.mode = "dragging";
+      cancelClimb();
       petEl.classList.add("pet--dragging");
       setActivityClass(null);
       clearTimeout(state.reactTimer);
@@ -486,19 +631,33 @@
         // 기본 그림은 꼬리가 오른쪽(뒤)에 있는 "왼쪽을 향한" 자세라서, 오른쪽으로
         // 걸을 때만 좌우 반전해야 꼬리가 이동 방향 뒤쪽에 남아 앞으로 걷는 것처럼 보인다.
         petEl.classList.toggle("pet--flip", state.dx > 0);
+      } else if (state.activity === "climb") {
+        stepClimb(dt);
       }
     }
     requestAnimationFrame(loop);
   }
   requestAnimationFrame(loop);
 
-  // 창 크기 변경 시 바닥/좌우 재정렬
+  // 창 크기 변경/스크롤 시 밟고 있던 요소의 좌표가 더 이상 안 맞을 수 있으니,
+  // 복잡하게 다시 계산하지 않고 그냥 바닥으로 되돌린다.
   window.addEventListener("resize", () => {
     state.x = clampX(state.x);
+    cancelClimb();
     if (state.mode !== "falling" && state.mode !== "dragging") state.y = floorTop();
     place();
     if (dialogEl && dialogEl.classList.contains("dialog--open")) positionDialog();
   });
+  window.addEventListener(
+    "scroll",
+    () => {
+      if (!state.climb) return;
+      cancelClimb();
+      place();
+      enterActivity(pickActivity());
+    },
+    { passive: true, capture: true }
+  );
 
   // ---- 대화창(위저드) ----
   let dialogEl = null;
@@ -506,6 +665,8 @@
 
   function openDialog() {
     state.mode = "dialog";
+    cancelClimb();
+    place();
     setActivityClass("pet--sitting");
     state.baseExpression = "happy";
     setExpression("excited");
