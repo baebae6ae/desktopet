@@ -197,6 +197,12 @@
     "pet--dancing",
     "pet--stretching",
     "pet--waving",
+    "pet--wiggling",
+    "pet--tilting",
+    "pet--sneezing",
+    "pet--hopping",
+    "pet--bowing",
+    "pet--looking",
     "pet--falling",
     "pet--landing",
   ];
@@ -240,6 +246,12 @@
     { type: "dance", cls: "pet--dancing", weight: 1.2, min: 2, max: 3.5, expr: "excited" },
     { type: "stretch", cls: "pet--stretching", weight: 1.2, min: 2, max: 3, expr: "happy" },
     { type: "wave", cls: "pet--waving", weight: 1.4, min: 1.5, max: 2.5, expr: "love" },
+    { type: "wiggle", cls: "pet--wiggling", weight: 1.2, min: 1.2, max: 2.2, expr: "excited" },
+    { type: "tilt", cls: "pet--tilting", weight: 1.1, min: 1.6, max: 1.6, expr: "surprised" },
+    { type: "sneeze", cls: "pet--sneezing", weight: 0.8, min: 0.9, max: 0.9, expr: "surprised" },
+    { type: "hop", cls: "pet--hopping", weight: 1.2, min: 1.3, max: 2.3, expr: "excited" },
+    { type: "bow", cls: "pet--bowing", weight: 0.9, min: 1.4, max: 1.4, expr: "love" },
+    { type: "look", cls: "pet--looking", weight: 1.2, min: 2, max: 3, expr: "happy" },
   ];
   function pickActivity() {
     const total = ACTIVITIES.reduce((s, a) => s + a.weight, 0);
@@ -258,6 +270,14 @@
     if (a.type === "walk") {
       const speed = 26 + Math.random() * 26;
       state.dx = (Math.random() < 0.5 ? -1 : 1) * speed;
+    }
+    // 몇몇 동작은 만화식 효과 텍스트를 곁들여 감정을 더 크게 보여준다
+    if (a.type === "tilt") spawnFx("?");
+    if (a.type === "bow") spawnFx("꾸벅");
+    if (a.type === "sneeze") {
+      setTimeout(() => {
+        if (state.activity === "sneeze" && state.mode === "roam") spawnFx("에취!!", { impact: true });
+      }, 450);
     }
     state.baseExpression = a.expr;
     setExpression(a.expr);
@@ -442,6 +462,9 @@
         state.y = floorTop();
         place();
         petEl.classList.toggle("pet--flip", state.dx > 0);
+      } else if (state.activity === "look") {
+        // 두리번: 0.6초마다 좌우 방향을 번갈아 본다 (CSS만으론 flip을 못 바꿔서 JS로)
+        petEl.classList.toggle("pet--flip", Math.floor(state.activityTimer / 0.6) % 2 === 1);
       }
     }
     requestAnimationFrame(loop);

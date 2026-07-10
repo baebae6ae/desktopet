@@ -319,6 +319,74 @@
 }
 .pet--waving .pet__limb--arm.pet__limb--right { animation: pet-arm-wave 0.35s ease-in-out infinite; }
 
+/* ---------------- 엉덩이 씰룩씰룩 ---------------- */
+@keyframes pet-wiggle-butt {
+  0%, 100% { rotate: -6deg; }
+  50% { rotate: 6deg; }
+}
+.pet--wiggling .pet__body {
+  transform-origin: 50% 88%;
+  animation: pet-wiggle-butt 0.3s ease-in-out infinite;
+}
+.pet--wiggling .pet__limb--leg.pet__limb--left { animation: pet-leg-dance 0.3s ease-in-out infinite; }
+.pet--wiggling .pet__limb--leg.pet__limb--right { animation: pet-leg-dance 0.3s ease-in-out infinite reverse; }
+
+/* ---------------- 갸우뚱 ---------------- */
+@keyframes pet-tilt {
+  0%, 100% { rotate: 0deg; }
+  30%, 75% { rotate: 14deg; }
+}
+.pet--tilting .pet__body {
+  transform-origin: 50% 85%;
+  animation: pet-tilt 1.6s ease-in-out;
+}
+
+/* ---------------- 에취(재채기) ---------------- */
+/* 숨 크게 들이마시고(위로 쭉) → 팍 재채기(옆으로 짜부) → 추스르기 */
+@keyframes pet-sneeze {
+  0% { scale: 1 1; translate: 0 0; rotate: 0deg; }
+  30%, 45% { scale: 0.94 1.1; translate: 0 -3px; rotate: -4deg; }
+  55% { scale: 1.28 0.72; translate: 0 4px; rotate: 9deg; }
+  75% { scale: 0.97 1.03; translate: 0 0; rotate: 0deg; }
+  100% { scale: 1 1; translate: 0 0; rotate: 0deg; }
+}
+.pet--sneezing .pet__body { animation: pet-sneeze 0.9s ease-out 1; }
+
+/* ---------------- 콩콩 뛰기 ---------------- */
+@keyframes pet-hop {
+  0%, 100% { translate: 0 0; scale: 1 1; }
+  30% { translate: 0 -9px; scale: 0.96 1.05; }
+  60% { translate: 0 0; scale: 1.07 0.93; }
+}
+.pet--hopping .pet__body { animation: pet-hop 0.45s ease-in-out infinite; }
+.pet--hopping .pet__shadow { animation: pet-shadow-walk 0.45s ease-in-out infinite; }
+.pet--hopping .pet__limb--arm.pet__limb--left { animation: pet-arm-swing-left 0.45s ease-in-out infinite; }
+.pet--hopping .pet__limb--arm.pet__limb--right { animation: pet-arm-swing-right 0.45s ease-in-out infinite; }
+
+/* ---------------- 꾸벅 인사 ---------------- */
+@keyframes pet-bow {
+  0%, 100% { rotate: 0deg; }
+  35%, 65% { rotate: 22deg; }
+}
+.pet--bowing .pet__body {
+  transform-origin: 50% 85%;
+  animation: pet-bow 1.4s ease-in-out;
+}
+@keyframes pet-arm-bow-left {
+  0%, 100% { rotate: -10deg; }
+  35%, 65% { rotate: -55deg; }
+}
+@keyframes pet-arm-bow-right {
+  0%, 100% { rotate: 10deg; }
+  35%, 65% { rotate: 55deg; }
+}
+.pet--bowing .pet__limb--arm.pet__limb--left { animation: pet-arm-bow-left 1.4s ease-in-out; }
+.pet--bowing .pet__limb--arm.pet__limb--right { animation: pet-arm-bow-right 1.4s ease-in-out; }
+
+/* ---------------- 두리번거리기 ----------------
+   좌우 방향 전환(pet--flip)은 JS가 토글하고, 몸은 숨쉬기만 살짝 */
+.pet--looking .pet__body { animation: pet-breathe 1.2s ease-in-out infinite; }
+
 /* ---------------- 낙하(꺄아악) ---------------- */
 /* 낙하: 더 격렬하게 - 크게 휘청이는 회전 + 잘게 떠는 진동을 동시에 건다 */
 @keyframes pet-fall-tumble {
