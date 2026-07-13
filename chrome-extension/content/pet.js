@@ -20,14 +20,15 @@
   const APP_URL = SITE + "/app.html";
 
   // ---- 모듈/스타일 로드 (확장 리소스를 dynamic import) ----
-  let sprites, questions, share, guide, gacha, css;
+  let sprites, questions, share, guide, gacha, categories, css;
   try {
-    [sprites, questions, share, guide, gacha, css] = await Promise.all([
+    [sprites, questions, share, guide, gacha, categories, css] = await Promise.all([
       import(url("vendor/sprites.js")),
       import(url("vendor/questions.js")),
       import(url("vendor/share.js")),
       import(url("vendor/guideBuilder.js")),
       import(url("vendor/gacha.js")),
+      import(url("vendor/categories.js")),
       fetch(url("content/pet.css")).then((r) => r.text()),
     ]);
   } catch (err) {
@@ -745,6 +746,31 @@
     return Math.max(0, Math.min(x, window.innerWidth - W));
   }
 
+  // 코딩 외 카테고리는 완성 프롬프트를 사이트로 안 보내고 바로 클립보드에
+  // 복사해준다. Clipboard API가 막힌 상황(포커스 등)을 대비해 execCommand
+  // 폴백까지 시도한다.
+  async function copyToClipboard(text) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch (_) {
+      try {
+        const ta = document.createElement("textarea");
+        ta.value = text;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        shadow.appendChild(ta);
+        ta.focus();
+        ta.select();
+        const ok = document.execCommand("copy");
+        ta.remove();
+        return ok;
+      } catch (_) {
+        return false;
+      }
+    }
+  }
+
   // ---- 만화식 효과 텍스트 ("!!", "쿵!!!" 등). 소리는 절대 재생하지 않는다 -
   // <audio>/Audio() 없이 순수 텍스트+CSS 애니메이션으로만 "효과음"을 표현한다.
   function spawnFx(text, { impact = false } = {}) {
@@ -894,7 +920,7 @@
     dialogEl.className = "dialog";
     dialogEl.innerHTML = `
       <div class="dialog__head">
-        <div class="dialog__title">무엇을 만들까요?<small>질문에 답하면 무엇을 요청할지 알려드려요</small></div>
+        <div class="dialog__title">무엇을 도와드릴까요?<small>질문에 답하면 무엇을 요청할지 알려드려요</small></div>
         <button class="dialog__close" title="닫기">✕</button>
       </div>
       <div class="dialog__progress"><div class="dialog__progress-bar"></div></div>
@@ -921,25 +947,44 @@
 
   // 위저드 로직: nocalhostmore questions.js 를 그대로 사용
   function makeWizard({ bodyBox, bar, backBtn, nextBtn }) {
+    let category = null; // "coding" | "writing" | "debug" | "summarize" | "image" | null(선택 전)
+    let engine = null; // { QUESTIONS, START_ID, getQuestion, resolveNext } — coding이면 questions 모듈 자체
     let answers = {};
     let history = [];
-    let currentId = questions.START_ID;
+    let currentId = null;
     let finished = false;
 
     function reset() {
+      category = null;
+      engine = null;
       answers = {};
       history = [];
-      currentId = questions.START_ID;
+      currentId = null;
+      finished = false;
+      render();
+    }
+
+    function selectCategory(cat) {
+      category = cat.id;
+      engine = cat.id === "coding" ? questions : categories.getLocalCategory(cat.id);
+      answers = {};
+      history = [];
+      currentId = engine.START_ID;
       finished = false;
       render();
     }
 
     function updateProgress() {
+      if (!engine) {
+        bar.style.width = "0%";
+        backBtn.hidden = true;
+        return;
+      }
       const pct = finished
         ? 100
-        : Math.max(6, Math.min(95, (history.length / questions.QUESTIONS.length) * 100));
+        : Math.max(6, Math.min(95, (history.length / engine.QUESTIONS.length) * 100));
       bar.style.width = `${pct}%`;
-      backBtn.hidden = history.length === 0 && !finished;
+      backBtn.hidden = false; // 카테고리 선택 화면으로라도 항상 돌아갈 수 있게
     }
 
     function goTo(id) {
@@ -953,7 +998,10 @@
         render();
         return;
       }
-      if (history.length === 0) return;
+      if (history.length === 0) {
+        reset(); // 첫 질문에서 뒤로가면 카테고리 선택으로
+        return;
+      }
       currentId = history.pop();
       render();
     }
@@ -961,7 +1009,7 @@
 
     function advanceFrom(q, value) {
       answers[q.id] = value;
-      const nextId = questions.resolveNext(q, value, answers);
+      const nextId = engine.resolveNext(q, value, answers);
       if (nextId) {
         goTo(nextId);
       } else {
@@ -970,9 +1018,48 @@
       }
     }
 
+    function renderCategoryPicker() {
+      const title = document.createElement("h2");
+      title.className = "q-title";
+      title.textContent = "오늘은 뭘 도와드릴까요?";
+      bodyBox.appendChild(title);
+      const hint = document.createElement("p");
+      hint.className = "q-hint";
+      hint.textContent = "하나를 고르면 딱 맞는 질문으로 안내해드려요.";
+      bodyBox.appendChild(hint);
+
+      const wrap = document.createElement("div");
+      wrap.className = "q-options";
+      for (const cat of categories.CATEGORIES) {
+        const b = document.createElement("button");
+        b.className = "q-option";
+        const label = document.createElement("div");
+        label.className = "q-option__label";
+        const span = document.createElement("span");
+        span.textContent = `${cat.icon} ${cat.label}`;
+        label.appendChild(span);
+        b.appendChild(label);
+        const d = document.createElement("div");
+        d.className = "q-option__desc";
+        d.textContent = cat.desc;
+        b.appendChild(d);
+        b.addEventListener("click", () => selectCategory(cat));
+        wrap.appendChild(b);
+      }
+      bodyBox.appendChild(wrap);
+      nextBtn.style.display = "none";
+      backBtn.hidden = true;
+      bar.style.width = "0%";
+    }
+
     function render() {
       bodyBox.innerHTML = "";
       bodyBox.scrollTop = 0;
+
+      if (!category) {
+        renderCategoryPicker();
+        return;
+      }
 
       if (finished) {
         renderGuide();
@@ -982,7 +1069,7 @@
       }
       nextBtn.style.display = "";
 
-      const q = questions.getQuestion(currentId);
+      const q = engine.getQuestion(currentId);
       if (!q) return;
 
       const title = document.createElement("h2");
@@ -1047,9 +1134,7 @@
       updateProgress();
     }
 
-    function renderGuide() {
-      const g = guide.buildGuide(answers);
-
+    function renderGuideList(g) {
       const lead = document.createElement("p");
       lead.className = "guide__lead";
       lead.textContent = "AI에게 이런 걸 요청하면 돼요! 👇";
@@ -1083,6 +1168,21 @@
         ul.appendChild(li);
       }
       bodyBox.appendChild(ul);
+    }
+
+    function appendRestartButton() {
+      const restart = document.createElement("button");
+      restart.className = "guide__restart";
+      restart.textContent = "처음부터 다시";
+      restart.addEventListener("click", reset);
+      bodyBox.appendChild(restart);
+    }
+
+    // 코딩 카테고리는 절대 손대지 않는다: nocalhostmore가 답변을 받아 완성
+    // 프롬프트(+광고)를 보여주는 유입 퍼널이라, 여기서는 가이드까지만 보여주고
+    // [프롬프트 생성하기]가 답변을 그대로 담아 사이트로 넘긴다.
+    function renderCodingGuide() {
+      renderGuideList(guide.buildGuide(answers));
 
       const cta = document.createElement("button");
       cta.className = "guide__cta";
@@ -1094,12 +1194,42 @@
         spawnFx(`+${gacha.EARN_PER_PROMPT} 코인 🪙`);
       });
       bodyBox.appendChild(cta);
+      appendRestartButton();
+    }
 
-      const restart = document.createElement("button");
-      restart.className = "guide__restart";
-      restart.textContent = "처음부터 다시";
-      restart.addEventListener("click", reset);
-      bodyBox.appendChild(restart);
+    // 코딩 외 카테고리(글쓰기/디버깅/요약/이미지): nocalhostmore가 이해 못 하는
+    // 답변 모양이라 사이트로 안 보내고, 그 자리에서 완성 프롬프트를 만들어
+    // 복사하게 한다.
+    function renderLocalGuide() {
+      renderGuideList(engine.buildGuide(answers));
+
+      const promptText = engine.buildPrompt(answers);
+      const box = document.createElement("pre");
+      box.className = "guide__prompt";
+      box.textContent = promptText;
+      bodyBox.appendChild(box);
+
+      const cta = document.createElement("button");
+      cta.className = "guide__cta";
+      cta.innerHTML = "프롬프트 복사하기 →<small>복사해서 ChatGPT · Claude 등에 붙여넣으세요</small>";
+      cta.addEventListener("click", async () => {
+        const ok = await copyToClipboard(promptText);
+        if (ok) {
+          cta.classList.add("is-copied");
+          cta.innerHTML = "복사 완료! ✓<small>이제 붙여넣기(Ctrl/Cmd+V) 하시면 돼요</small>";
+          gacha.addCoins(gacha.EARN_PER_PROMPT);
+          spawnFx(`+${gacha.EARN_PER_PROMPT} 코인 🪙`);
+        } else {
+          cta.innerHTML = "복사 실패 😥<small>프롬프트 상자를 직접 선택해 복사해주세요</small>";
+        }
+      });
+      bodyBox.appendChild(cta);
+      appendRestartButton();
+    }
+
+    function renderGuide() {
+      if (category === "coding") renderCodingGuide();
+      else renderLocalGuide();
     }
 
     render();

@@ -754,6 +754,26 @@
   font-size: 12px;
 }
 
+/* 코딩 외 카테고리: nocalhostmore로 안 보내고 그 자리에서 완성 프롬프트를 보여준다 */
+.guide__prompt {
+  background: #0f1319;
+  border: 1px solid #2c3340;
+  border-radius: 10px;
+  padding: 10px 11px;
+  margin: 10px 0 0;
+  max-height: 180px;
+  overflow-y: auto;
+  font-family: "Consolas", "D2Coding", "Courier New", monospace;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: #d7dee8;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.guide__cta.is-copied {
+  background: linear-gradient(135deg, #37d0ff, #5cff8f);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .pet__body,
   .pet__limb,

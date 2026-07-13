@@ -22,6 +22,11 @@
 - **페이지와 상호작용** — 화면에 보이는 버튼/이미지 같은 요소 위에 폴짝 올라가
   쿵쿵 구르고(밟힌 요소가 실제로 들썩임), 모서리에서 아래를 빼꼼 내려다보고,
   그 위에서 낮잠도 잠
+- **다섯 가지 프롬프트 카테고리** — 펫을 클릭하면 "오늘은 뭘 도와드릴까요?"로
+  코딩 프로젝트 · 글쓰기 · 에러 고치기 · 요약·정리 · 이미지 생성 중 고른다.
+  **코딩 프로젝트만** 기존 그대로 nocalhostmore로 넘어가고(유입 퍼널), 나머지
+  네 카테고리는 그 자리에서 완성 프롬프트를 만들어 바로 복사할 수 있다
+  (`vendor/cat-*.js` + `vendor/wizardEngine.js`)
 
 ## 설치 (개발자 모드로 불러오기)
 아직 웹스토어 미등록 상태에서 테스트하려면:
@@ -46,8 +51,12 @@ vendor/                # nocalhostmore 로직 재사용 + 캐릭터/가이드
   sprites.js           # 8비트 캐릭터 렌더 데이터(ES 모듈 포팅)
   questions.js         # 질문 모델 (nocalhostmore 원본)
   share.js             # 답변 ↔ URL 프래그먼트 인코딩 (nocalhostmore 원본)
-  guideBuilder.js      # 답변 → "요청 가이드" 변환 (사이트로 넘기기 전 단계)
+  guideBuilder.js      # 답변 → "요청 가이드" 변환 (코딩 카테고리 전용, 사이트로 넘기기 전 단계)
   gacha.js             # 코인/가챠 확률/보관함·장착 로직(팝업 + 콘텐츠 스크립트 공용)
+  wizardEngine.js      # 코딩 외 카테고리가 공용으로 쓰는 위저드 엔진 + 가이드 빌더
+  categories.js        # 카테고리 목록(코딩 + cat-*.js 4종) 레지스트리
+  cat-writing.js        cat-debug.js / cat-summarize.js / cat-image.js
+                       # 카테고리별 질문 + 가이드 + 완성 프롬프트 조립 로직
 popup/                 # 켜기·끄기·캐릭터 선택·사이트 열기·가챠 뽑기·장착
 icons/                 # 아이콘 (nocalhostmore 브랜드)
 ```
