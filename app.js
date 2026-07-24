@@ -150,8 +150,7 @@
   const GEAR_LIMB_KEYS = { arm: ["armLeft", "armRight"], legs: ["legLeft", "legRight"] };
   function renderLimbGear(equipped) {
     for (const el of Object.values(limbEls)) {
-      const band = el.querySelector(".pet__gear-band");
-      if (band) band.remove();
+      el.querySelectorAll(".pet__gear-band").forEach((b) => b.remove());
     }
     if (!equipped) return;
     for (const [slot, keys] of Object.entries(GEAR_LIMB_KEYS)) {
@@ -161,10 +160,18 @@
       for (const key of keys) {
         const limb = limbEls[key];
         if (!limb) continue;
-        const band = document.createElement("span");
-        band.className = "pet__gear-band";
-        band.style.backgroundColor = item.swatch;
-        limb.appendChild(band);
+        for (const part of gacha.bandPartsFor(item)) {
+          const band = document.createElement("span");
+          band.className = "pet__gear-band";
+          band.style.left = `${part.left}%`;
+          band.style.top = `${part.top}%`;
+          band.style.width = `${part.width}%`;
+          band.style.height = `${part.height}%`;
+          band.style.borderRadius = part.radius || "3px";
+          band.style.backgroundColor = part.color || item.swatch;
+          if (part.rotate) band.style.rotate = `${part.rotate}deg`;
+          limb.appendChild(band);
+        }
       }
     }
   }

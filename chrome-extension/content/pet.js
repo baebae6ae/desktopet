@@ -178,13 +178,12 @@
 
   // ---- 가챠로 뽑은 팔/다리 장착템 표시 ----
   // 해당 limb div의 자식으로 붙여서 걷기/점프 등 회전·위치를 그대로 물려받고,
-  // 이모티콘 스티커 대신 실루엣과 같은 톤의 테두리를 두른 색 밴드로 그려서
-  // "얹은" 게 아니라 팔다리에 두른 것처럼 보이게 한다.
+  // 단일 색 블록이 아니라 아이템마다 다른 조각 구성(bandParts)으로 그려서
+  // 시계는 줄+시계판, 운동화는 몸체+밑창처럼 실루엣이 실제로 구별되게 한다.
   const GEAR_LIMB_KEYS = { arm: ["armLeft", "armRight"], legs: ["legLeft", "legRight"] };
   function renderLimbGear(equipped) {
     for (const el of Object.values(limbEls)) {
-      const band = el.querySelector(".pet__gear-band");
-      if (band) band.remove();
+      el.querySelectorAll(".pet__gear-band").forEach((b) => b.remove());
     }
     if (!equipped) return;
     for (const [slot, keys] of Object.entries(GEAR_LIMB_KEYS)) {
@@ -194,10 +193,18 @@
       for (const key of keys) {
         const limb = limbEls[key];
         if (!limb) continue;
-        const band = document.createElement("span");
-        band.className = "pet__gear-band";
-        band.style.backgroundColor = item.swatch;
-        limb.appendChild(band);
+        for (const part of gacha.bandPartsFor(item)) {
+          const band = document.createElement("span");
+          band.className = "pet__gear-band";
+          band.style.left = `${part.left}%`;
+          band.style.top = `${part.top}%`;
+          band.style.width = `${part.width}%`;
+          band.style.height = `${part.height}%`;
+          band.style.borderRadius = part.radius || "3px";
+          band.style.backgroundColor = part.color || item.swatch;
+          if (part.rotate) band.style.rotate = `${part.rotate}deg`;
+          limb.appendChild(band);
+        }
       }
     }
   }
