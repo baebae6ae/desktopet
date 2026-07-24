@@ -150,22 +150,19 @@ const GEAR_OUTLINE = "#2b2b2b";
 
 export function gearRects(slot, item) {
   if (!item || !item.glyph || item.glyph.length === 0) return [];
-  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-  for (const r of item.glyph) {
-    x0 = Math.min(x0, r.x);
-    y0 = Math.min(y0, r.y);
-    x1 = Math.max(x1, r.x + r.w);
-    y1 = Math.max(y1, r.y + r.h);
-  }
-  const outline = {
-    x: Math.max(0, x0 - 1),
-    y: Math.max(0, y0 - 1),
-    w: x1 - Math.max(0, x0 - 1) + 1,
-    h: y1 - Math.max(0, y0 - 1) + 1,
+  // 조각마다 각자 테두리를 두른다(전체를 감싸는 하나의 큰 사각형이 아니라) -
+  // 챔피언 띠처럼 조각들이 대각선으로 뚝뚝 떨어져 있는 아이템의 경우, 하나의
+  // bounding box로 테두리를 그리면 그 사이 빈 공간까지 전부 검게 칠해져서
+  // 커다란 검은 덩어리로 보이는 문제가 있었다(조각별로 그려야 갭이 유지된다).
+  const outlines = item.glyph.map((r) => ({
+    x: Math.max(0, r.x - 1),
+    y: Math.max(0, r.y - 1),
+    w: r.w + 2,
+    h: r.h + 2,
     color: GEAR_OUTLINE,
-  };
+  }));
   const fills = item.glyph.map((r) => ({ x: r.x, y: r.y, w: r.w, h: r.h, color: r.color || item.swatch }));
-  return [outline, ...fills];
+  return [...outlines, ...fills];
 }
 
 // 팔/다리는 limb div 자식으로 붙는 작은 조각 div들 — glyph가 아니라 bandParts를
