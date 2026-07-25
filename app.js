@@ -169,6 +169,7 @@
           band.style.height = `${part.height}%`;
           band.style.borderRadius = part.radius || "3px";
           band.style.backgroundColor = part.color || item.swatch;
+          if (part.noBorder) band.style.border = "none";
           if (part.rotate) band.style.rotate = `${part.rotate}deg`;
           limb.appendChild(band);
         }
