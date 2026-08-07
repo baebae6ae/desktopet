@@ -264,6 +264,8 @@ export const STARTER_COINS = 50;
 export const DAILY_BONUS = 30; // 하루 첫 방문 출석 보너스
 export const LEVEL_REWARD = 20; // 애정도 레벨업 보상
 export const AFFECTION_PER_LEVEL = 8; // 쓰다듬기 n번마다 레벨 1 상승
+export const DUPE_REFUND = 15; // 이미 가진 아이템이 또 나오면 코인으로 일부 환급(완전 헛수고 방지)
+export const PITY_THRESHOLD = 10; // 이 횟수 안에 에픽을 못 뽑으면 다음 뽑기는 에픽 확정(천장)
 
 export function affectionLevel(points) {
   return Math.floor((points || 0) / AFFECTION_PER_LEVEL) + 1;
@@ -286,22 +288,24 @@ function pickRarity() {
   return "common";
 }
 
-export function rollItem() {
-  const rarity = pickRarity();
+export function rollItem(forceRarity) {
+  const rarity = forceRarity || pickRarity();
   const pool = ITEMS.filter((i) => i.rarity === rarity);
   return pool[Math.floor(Math.random() * pool.length)];
 }
 
 export async function getGachaState() {
-  const { coins, inventory, equipped } = await chrome.storage.local.get([
+  const { coins, inventory, equipped, pity } = await chrome.storage.local.get([
     "coins",
     "inventory",
     "equipped",
+    "pity",
   ]);
   return {
     coins: typeof coins === "number" ? coins : STARTER_COINS,
     inventory: inventory || {},
     equipped: equipped || {},
+    pity: typeof pity === "number" ? pity : 0,
   };
 }
 
@@ -312,17 +316,24 @@ export async function addCoins(amount) {
   return next;
 }
 
+// 뽑기 = 코인 소모 + 아이템 획득. 두 가지 안전장치를 둔다:
+//  1) 천장(pity) — PITY_THRESHOLD 안에 에픽이 안 나오면 다음 뽑기는 에픽 확정
+//  2) 중복 환급 — 이미 가진 아이템이 또 나오면 DUPE_REFUND 만큼 코인을 돌려줘서
+//     완전히 헛수고가 되는 뽑기가 없게 한다
 export async function pullGacha() {
   const state = await getGachaState();
   if (state.coins < PULL_COST) {
     return { ok: false, reason: "not-enough-coins", coins: state.coins };
   }
-  const item = rollItem();
-  const nextCoins = state.coins - PULL_COST;
+  const pityBroken = state.pity + 1 >= PITY_THRESHOLD;
+  const item = rollItem(pityBroken ? "epic" : null);
+  const nextPity = item.rarity === "epic" ? 0 : state.pity + 1;
   const isNew = !state.inventory[item.id];
+  const refund = isNew ? 0 : DUPE_REFUND;
+  const nextCoins = state.coins - PULL_COST + refund;
   const nextInventory = { ...state.inventory, [item.id]: (state.inventory[item.id] || 0) + 1 };
-  await chrome.storage.local.set({ coins: nextCoins, inventory: nextInventory });
-  return { ok: true, item, coins: nextCoins, isNew };
+  await chrome.storage.local.set({ coins: nextCoins, inventory: nextInventory, pity: nextPity });
+  return { ok: true, item, coins: nextCoins, isNew, refund, pityBroken, pity: nextPity };
 }
 
 export async function setEquipped(slot, itemId) {

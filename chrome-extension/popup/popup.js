@@ -22,6 +22,8 @@ function normalizeList(list) {
   return Array.isArray(list) ? list : [];
 }
 
+// disabledSites: 펫을 숨긴 사이트 목록(옵트아웃). 기본은 모든 사이트에서
+// 보이고, 여기 들어간 사이트에서만 예외로 안 보인다.
 function renderSiteList(list) {
   const sites = normalizeList(list);
   siteListEl.innerHTML = "";
@@ -34,23 +36,23 @@ function renderSiteList(list) {
     const removeBtn = document.createElement("button");
     removeBtn.type = "button";
     removeBtn.textContent = "✕";
-    removeBtn.setAttribute("aria-label", `${host} 제거`);
-    removeBtn.addEventListener("click", () => toggleSite(host, false));
+    removeBtn.setAttribute("aria-label", `${host}에서 다시 보이기`);
+    removeBtn.addEventListener("click", () => setSiteVisible(host, true));
     li.append(span, removeBtn);
     siteListEl.appendChild(li);
   }
   if (currentHost) {
-    currentSiteToggleEl.checked = sites.includes(currentHost);
+    currentSiteToggleEl.checked = !sites.includes(currentHost);
   }
 }
 
-async function toggleSite(host, allow) {
-  const { allowedSites } = await chrome.storage.local.get(["allowedSites"]);
-  const sites = new Set(normalizeList(allowedSites));
-  if (allow) sites.add(host);
-  else sites.delete(host);
+async function setSiteVisible(host, visible) {
+  const { disabledSites } = await chrome.storage.local.get(["disabledSites"]);
+  const sites = new Set(normalizeList(disabledSites));
+  if (visible) sites.delete(host);
+  else sites.add(host);
   const next = [...sites];
-  await chrome.storage.local.set({ allowedSites: next });
+  await chrome.storage.local.set({ disabledSites: next });
   renderSiteList(next);
 }
 
@@ -78,10 +80,10 @@ function renderAffection(points) {
 }
 
 async function init() {
-  const { enabled, species, allowedSites, petName, affection } = await chrome.storage.local.get([
+  const { enabled, species, disabledSites, petName, affection } = await chrome.storage.local.get([
     "enabled",
     "species",
-    "allowedSites",
+    "disabledSites",
     "petName",
     "affection",
   ]);
@@ -96,7 +98,7 @@ async function init() {
     currentSiteRowEl.hidden = false;
     currentSiteHostEl.textContent = currentHost;
   }
-  renderSiteList(allowedSites);
+  renderSiteList(disabledSites);
 }
 init();
 
@@ -123,11 +125,11 @@ speciesEl.addEventListener("change", () => {
 
 currentSiteToggleEl.addEventListener("change", () => {
   if (!currentHost) return;
-  toggleSite(currentHost, currentSiteToggleEl.checked);
+  setSiteVisible(currentHost, currentSiteToggleEl.checked);
   showHint(
     currentSiteToggleEl.checked
       ? `${currentHost}에서 펫이 보여요.`
-      : `${currentHost}에서 펫을 껐어요.`
+      : `${currentHost}에서 펫을 숨겼어요.`
   );
 });
 
@@ -147,6 +149,7 @@ const coinBalanceEl = document.getElementById("coin-balance");
 const tabCoinsEl = document.getElementById("tab-coins");
 const pullBtn = document.getElementById("pull-btn");
 const gachaHintEl = document.getElementById("gacha-hint");
+const pityMeterEl = document.getElementById("pity-meter");
 const gachaViewEl = document.getElementById("view-gacha");
 const pullstageEl = document.getElementById("pullstage");
 const particlesEl = document.getElementById("particles");
@@ -160,6 +163,11 @@ function setCoinDisplay(coins) {
   coinBalanceEl.textContent = coins;
   tabCoinsEl.textContent = `🪙 ${coins}`;
   pullBtn.disabled = coins < gacha.PULL_COST;
+}
+
+function renderPityMeter(pity) {
+  const left = Math.max(0, gacha.PITY_THRESHOLD - pity);
+  pityMeterEl.innerHTML = `천장까지 <b>${left}</b>번 — 중복은 코인으로 환급돼요`;
 }
 
 function renderSlots(equipped) {
@@ -181,6 +189,7 @@ function renderSlots(equipped) {
 async function refreshGachaView() {
   const state = await gacha.getGachaState();
   setCoinDisplay(state.coins);
+  renderPityMeter(state.pity);
   renderSlots(state.equipped);
   return state;
 }
@@ -301,9 +310,18 @@ pullBtn.addEventListener("click", async () => {
     return;
   }
   setCoinDisplay(result.coins);
+  renderPityMeter(result.pity);
 
   // 결과는 이미 정해졌지만, 잠깐 예열 텀을 둬야 "짠!" 하고 터지는 느낌이 산다.
   await new Promise((r) => setTimeout(r, 420));
   pullBtn.classList.remove("is-spinning");
   await playPullFx(result.item, result.isNew);
+
+  if (result.pityBroken) {
+    gachaHintEl.textContent = "천장 발동! 에픽이 확정으로 나왔어요 ✨";
+  } else if (result.refund > 0) {
+    gachaHintEl.textContent = `중복 아이템이라 +${result.refund} 코인 환급했어요 🪙`;
+  } else {
+    gachaHintEl.textContent = "";
+  }
 });

@@ -769,6 +769,24 @@
 .guide__cta.is-copied {
   background: linear-gradient(135deg, #37d0ff, #5cff8f);
 }
+.guide__copy {
+  display: block;
+  width: 100%;
+  margin-top: 10px;
+  border: 1px solid #37d0ff;
+  background: transparent;
+  color: #37d0ff;
+  border-radius: 8px;
+  padding: 9px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+}
+.guide__copy.is-copied {
+  border-color: #5cff8f;
+  color: #5cff8f;
+}
 
 @media (prefers-reduced-motion: reduce) {
   .pet__body,

@@ -36,25 +36,26 @@
     return;
   }
 
-  // ---- 설정(켜짐 여부/허용 사이트/종족) ----
-  const store = await chrome.storage.local.get(["enabled", "species", "allowedSites"]);
+  // ---- 설정(켜짐 여부/숨긴 사이트/종족) ----
+  const store = await chrome.storage.local.get(["enabled", "species", "disabledSites"]);
   if (store.enabled === false) return;
 
-  // 매번 모든 사이트에 뜨면 부담스럽다는 피드백을 반영해, 팝업에서 직접 고른
-  // 사이트에서만 나타난다. 목록이 비어있으면(기본값) 아무 데도 뜨지 않는다.
-  const isSiteAllowed = (list) => Array.isArray(list) && list.includes(location.hostname);
-  if (!isSiteAllowed(store.allowedSites)) {
-    // 이 페이지가 열려있는 동안 팝업에서 "이 사이트에서 보이기"를 켜면
-    // 새로고침 없이 바로 나타나도록 허용목록 변경을 기다린다.
+  // 설치 직후 아무 데도 안 보이면 존재 자체를 못 느끼고 바로 삭제당한다.
+  // 그래서 기본은 모든 사이트에서 보이고, 팝업에서 "이 사이트에서 숨기기"를
+  // 켠 곳만 예외로 안 뜨는 방식(옵트아웃)으로 바꿨다.
+  const isSiteHidden = (list) => Array.isArray(list) && list.includes(location.hostname);
+  if (isSiteHidden(store.disabledSites)) {
+    // 이 페이지가 열려있는 동안 팝업에서 "이 사이트에서 숨기기"를 끄면
+    // 새로고침 없이 바로 나타나도록 목록 변경을 기다린다.
     await new Promise((resolve) => {
-      function onAllowedSitesChange(changes, area) {
-        if (area !== "local" || !changes.allowedSites) return;
-        if (isSiteAllowed(changes.allowedSites.newValue)) {
-          chrome.storage.onChanged.removeListener(onAllowedSitesChange);
+      function onDisabledSitesChange(changes, area) {
+        if (area !== "local" || !changes.disabledSites) return;
+        if (!isSiteHidden(changes.disabledSites.newValue)) {
+          chrome.storage.onChanged.removeListener(onDisabledSitesChange);
           resolve();
         }
       }
-      chrome.storage.onChanged.addListener(onAllowedSitesChange);
+      chrome.storage.onChanged.addListener(onDisabledSitesChange);
     });
   }
 
@@ -1186,15 +1187,47 @@
       bodyBox.appendChild(restart);
     }
 
-    // 코딩 카테고리는 절대 손대지 않는다: nocalhostmore가 답변을 받아 완성
-    // 프롬프트(+광고)를 보여주는 유입 퍼널이라, 여기서는 가이드까지만 보여주고
-    // [프롬프트 생성하기]가 답변을 그대로 담아 사이트로 넘긴다.
+    // 사이트로 넘기기 전에, 그 자리에서도 바로 쓸 수 있는 짧은 초안을 준다.
+    // guideBuilder.js가 만드는 항목(term/detail)만 조합하는 순수 텍스트 가공이라
+    // questions.js/guideBuilder.js/share.js — 즉 nocalhostmore 유입 퍼널 자체의
+    // 로직·데이터는 전혀 건드리지 않는다.
+    function buildQuickDraft(g) {
+      const lines = [g.idea || "", "", "아래 조건을 지켜서 만들어줘:"];
+      for (const item of g.items) lines.push(`- ${item.title}: ${item.detail}`);
+      return lines.join("\n");
+    }
+
+    // 코딩 카테고리의 사이트 이동 로직은 절대 손대지 않는다: nocalhostmore가
+    // 답변을 받아 완성 프롬프트(+광고)를 보여주는 유입 퍼널이라, [더 정교하게
+    // 다듬기] 버튼이 답변을 그대로 담아 사이트로 넘기는 동작·보상은 기존과 동일하다.
+    // 추가된 건 그 위에 놓인 "지금 바로 쓸 수 있는 간단 초안" 뿐이다.
     function renderCodingGuide() {
-      renderGuideList(guide.buildGuide(answers));
+      const g = guide.buildGuide(answers);
+      renderGuideList(g);
+
+      const draft = buildQuickDraft(g);
+      const box = document.createElement("pre");
+      box.className = "guide__prompt";
+      box.textContent = draft;
+      bodyBox.appendChild(box);
+
+      const copyBtn = document.createElement("button");
+      copyBtn.className = "guide__copy";
+      copyBtn.textContent = "간단 버전 복사하기";
+      copyBtn.addEventListener("click", async () => {
+        const ok = await copyToClipboard(draft);
+        copyBtn.textContent = ok ? "복사 완료! ✓" : "복사 실패 😥";
+        copyBtn.classList.toggle("is-copied", ok);
+        setTimeout(() => {
+          copyBtn.textContent = "간단 버전 복사하기";
+          copyBtn.classList.remove("is-copied");
+        }, 1600);
+      });
+      bodyBox.appendChild(copyBtn);
 
       const cta = document.createElement("button");
       cta.className = "guide__cta";
-      cta.innerHTML = "프롬프트 생성하기 →<small>답변을 그대로 담아 사이트에서 완성 프롬프트를 만들어요</small>";
+      cta.innerHTML = "더 정교하게 다듬기 →<small>답변을 그대로 담아 사이트에서 완성 프롬프트를 만들어요</small>";
       cta.addEventListener("click", () => {
         const frag = share.encodeAnswers(answers); // "s=..."
         window.open(`${APP_URL}#${frag}`, "_blank", "noopener");
@@ -1250,7 +1283,7 @@
     if (changes.enabled && changes.enabled.newValue === false) {
       host.remove();
     }
-    if (changes.allowedSites && !isSiteAllowed(changes.allowedSites.newValue)) {
+    if (changes.disabledSites && isSiteHidden(changes.disabledSites.newValue)) {
       host.remove();
     }
     // 팝업에서 가챠로 새 아이템을 장착/해제하면 새로고침 없이 바로 반영

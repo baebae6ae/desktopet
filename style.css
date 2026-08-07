@@ -284,6 +284,12 @@ input[type="text"] {
   0%, 100% { scale: 1; }
   50% { scale: 1.04; }
 }
+.pity-meter {
+  font-size: 10px;
+  color: #9aa4b5;
+  margin: 4px 2px 6px;
+}
+.pity-meter b { color: #ffb03c; }
 
 /* 버튼을 누르면 화면 중앙에서 빛이 터지고 아이템이 튀어나오는 "상자 개봉" 연출
    (슬롯머신 릴/포인터 메타포는 쓰지 않는다) */

@@ -888,12 +888,39 @@
       bodyBox.appendChild(restart);
     }
 
+    function buildQuickDraft(g) {
+      const lines = [g.idea || "", "", "아래 조건을 지켜서 만들어줘:"];
+      for (const item of g.items) lines.push(`- ${item.title}: ${item.detail}`);
+      return lines.join("\n");
+    }
+
     function renderCodingGuide() {
-      renderGuideList(guide.buildGuide(answers));
+      const g = guide.buildGuide(answers);
+      renderGuideList(g);
+
+      const draft = buildQuickDraft(g);
+      const box = document.createElement("pre");
+      box.className = "guide__prompt";
+      box.textContent = draft;
+      bodyBox.appendChild(box);
+
+      const copyBtn = document.createElement("button");
+      copyBtn.className = "guide__copy";
+      copyBtn.textContent = "간단 버전 복사하기";
+      copyBtn.addEventListener("click", async () => {
+        const ok = await copyToClipboard(draft);
+        copyBtn.textContent = ok ? "복사 완료! ✓" : "복사 실패 😥";
+        copyBtn.classList.toggle("is-copied", ok);
+        setTimeout(() => {
+          copyBtn.textContent = "간단 버전 복사하기";
+          copyBtn.classList.remove("is-copied");
+        }, 1600);
+      });
+      bodyBox.appendChild(copyBtn);
 
       const cta = document.createElement("button");
       cta.className = "guide__cta";
-      cta.innerHTML = "프롬프트 생성하기 →<small>답변을 그대로 담아 사이트에서 완성 프롬프트를 만들어요</small>";
+      cta.innerHTML = "더 정교하게 다듬기 →<small>답변을 그대로 담아 사이트에서 완성 프롬프트를 만들어요</small>";
       cta.addEventListener("click", () => {
         const frag = share.encodeAnswers(answers);
         window.open(`${APP_URL}#${frag}`, "_blank", "noopener");
@@ -1001,6 +1028,7 @@
   const tabCoinsEl = document.getElementById("tab-coins");
   const pullBtn = document.getElementById("pull-btn");
   const gachaHintEl = document.getElementById("gacha-hint");
+  const pityMeterEl = document.getElementById("pity-meter");
   const gachaViewEl = document.getElementById("view-gacha");
   const pullstageEl = document.getElementById("pullstage");
   const particlesEl = document.getElementById("particles");
@@ -1013,6 +1041,11 @@
     coinBalanceEl.textContent = coins;
     tabCoinsEl.textContent = `🪙 ${coins}`;
     pullBtn.disabled = coins < gacha.PULL_COST;
+  }
+
+  function renderPityMeter(pity) {
+    const left = Math.max(0, gacha.PITY_THRESHOLD - pity);
+    pityMeterEl.innerHTML = `천장까지 <b>${left}</b>번 — 중복은 코인으로 환급돼요`;
   }
 
   function renderSlots(equipped) {
@@ -1034,6 +1067,7 @@
   async function refreshGachaView() {
     const s = await gacha.getGachaState();
     setCoinDisplay(s.coins);
+    renderPityMeter(s.pity);
     renderSlots(s.equipped);
     return s;
   }
@@ -1148,9 +1182,18 @@
       return;
     }
     setCoinDisplay(result.coins);
+    renderPityMeter(result.pity);
 
     await new Promise((r) => setTimeout(r, 420));
     pullBtn.classList.remove("is-spinning");
     await playPullFx(result.item, result.isNew);
+
+    if (result.pityBroken) {
+      gachaHintEl.textContent = "천장 발동! 에픽이 확정으로 나왔어요 ✨";
+    } else if (result.refund > 0) {
+      gachaHintEl.textContent = `중복 아이템이라 +${result.refund} 코인 환급했어요 🪙`;
+    } else {
+      gachaHintEl.textContent = "";
+    }
   });
 })();

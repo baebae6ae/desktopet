@@ -207,6 +207,12 @@ footer {
 .gacha-pull.is-spinning {
   animation: pull-btn-pulse 0.5s ease-in-out infinite;
 }
+.pity-meter {
+  font-size: 10px;
+  color: #9aa4b5;
+  margin: 4px 2px 6px;
+}
+.pity-meter b { color: #ffb03c; }
 @keyframes pull-btn-pulse {
   0%, 100% { scale: 1; }
   50% { scale: 1.04; }
