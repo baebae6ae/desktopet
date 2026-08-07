@@ -4,9 +4,11 @@
  * pet.js — Chrome 확장 콘텐츠 스크립트.
  * 모든 웹페이지 위(최상위 프레임)에 8비트 펫을 띄운다. 펫은 화면 아래쪽을
  * 좌우로 돌아다니고, 드래그로 옮길 수 있으며, 높은 곳에서 놓으면 "꺄아악"
- * 하고 떨어진다. 클릭하면 그 자리에 멈춰 말풍선 대화창(질문 위저드)을 열고,
- * 답을 다 하면 "무엇을 요청해야 하는지" 가이드를 보여준 뒤, [프롬프트 생성하기]
- * 버튼으로 답변을 담아 nocalhostmore 사이트로 보낸다(광고 퍼널의 목적지).
+ * 하고 떨어진다. 클릭하면 계속 돌아다니는 채로 작은 메뉴가 떠서 "뭐 만들지
+ * 물어볼지 / 그냥 인사만 할지"를 고르게 하고, 위저드를 선택했을 때만 말풍선
+ * 대화창이 열린다. 답을 다 하면 "무엇을 요청해야 하는지" 가이드를 보여준 뒤,
+ * [더 정교하게 다듬기] 버튼으로 답변을 담아 nocalhostmore 사이트로 보낸다
+ * (광고 퍼널의 목적지).
  */
 
 (async () => {
@@ -713,6 +715,7 @@
       drag.moved = true;
       state.mode = "dragging";
       cancelClimb();
+      closeMenu();
       petEl.classList.add("pet--dragging");
       setActivityClass(null);
       clearTimeout(state.reactTimer);
@@ -734,8 +737,10 @@
     petEl.classList.remove("pet--dragging");
 
     if (!wasMoved) {
-      // 순수 클릭 → 대화창 (드래그였다면 여기로 오지 않으므로 클릭-대화 오작동 방지)
-      openDialog();
+      // 순수 클릭 → 곧장 설문으로 끌고 가지 않고, 먼저 펫 메뉴로 "뭐 만들지
+      // 물어볼지 / 그냥 인사만 할지"부터 고르게 한다(드래그였다면 여기로
+      // 오지 않으므로 클릭-메뉴 오작동 방지).
+      toggleMenu();
       return;
     }
     // 드래그로 놓음: 바닥보다 위면 낙하, 바닥이면 그대로 복귀
@@ -880,6 +885,7 @@
     if (state.mode !== "falling" && state.mode !== "dragging") state.y = floorTop();
     place();
     if (dialogEl && dialogEl.classList.contains("dialog--open")) positionDialog();
+    if (menuEl && menuEl.classList.contains("pet-menu--open")) positionMenu();
   });
   window.addEventListener(
     "scroll",
@@ -892,11 +898,77 @@
     { passive: true, capture: true }
   );
 
+  // ---- 펫 메뉴: 클릭하면 바로 설문(위저드)로 끌려가는 대신, 먼저 "뭐 만들지
+  // 물어볼지 / 그냥 인사만 할지"부터 고르게 하는 가벼운 팝오버. 다이얼로그와
+  // 달리 펫을 앉히거나 애니메이션을 멈추지 않고 roam 상태를 유지한 채 떠
+  // 있다가, 아무 것도 안 고르면 몇 초 뒤 스스로 사라진다 — 프롬프트 설문이
+  // 클릭의 "디폴트 결과"가 아니라 펫이 가끔 제안하는 선택지처럼 느껴지게 한다.
+  let menuEl = null;
+  let menuAutoCloseTimer = null;
+  const MENU_GREETINGS = [
+    "안녕! 오늘도 반가워 >_<",
+    "그냥 놀러 왔구나, 좋아!",
+    "심심할 때 또 눌러줘!",
+    "네가 옆에 있으니 든든해",
+  ];
+
+  function buildMenu() {
+    menuEl = document.createElement("div");
+    menuEl.className = "pet-menu";
+    menuEl.innerHTML = `
+      <button type="button" class="pet-menu__btn pet-menu__btn--primary" data-action="wizard">💬 뭐 만들지 물어보기</button>
+      <button type="button" class="pet-menu__btn" data-action="greet">👋 인사만 할래</button>`;
+    menuEl.addEventListener("click", (e) => {
+      const btn = e.target.closest("button");
+      if (!btn) return;
+      closeMenu();
+      if (btn.dataset.action === "wizard") {
+        openDialog();
+      } else {
+        react(MENU_GREETINGS[Math.floor(Math.random() * MENU_GREETINGS.length)], "love");
+      }
+    });
+    layer.appendChild(menuEl);
+  }
+
+  function positionMenu() {
+    if (!menuEl) return;
+    const MW = Math.min(230, window.innerWidth - 24);
+    const centerX = state.x + W / 2;
+    const left = Math.max(8, Math.min(centerX - MW / 2, window.innerWidth - MW - 8));
+    menuEl.style.left = `${left}px`;
+    menuEl.style.width = `${MW}px`;
+    menuEl.style.bottom = `${window.innerHeight - state.y + 10}px`;
+  }
+
+  function openMenu() {
+    if (!menuEl) buildMenu();
+    positionMenu();
+    requestAnimationFrame(() => menuEl.classList.add("pet-menu--open"));
+    clearTimeout(menuAutoCloseTimer);
+    menuAutoCloseTimer = setTimeout(closeMenu, 6000);
+  }
+
+  function closeMenu() {
+    clearTimeout(menuAutoCloseTimer);
+    if (menuEl) menuEl.classList.remove("pet-menu--open");
+  }
+
+  function toggleMenu() {
+    if (menuEl && menuEl.classList.contains("pet-menu--open")) closeMenu();
+    else openMenu();
+  }
+
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && menuEl && menuEl.classList.contains("pet-menu--open")) closeMenu();
+  });
+
   // ---- 대화창(위저드) ----
   let dialogEl = null;
   let wiz = null;
 
   function openDialog() {
+    closeMenu();
     state.mode = "dialog";
     cancelClimb();
     place();

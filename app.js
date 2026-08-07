@@ -445,6 +445,7 @@
     if (!drag.moved && dist > DRAG_THRESHOLD) {
       drag.moved = true;
       state.mode = "dragging";
+      closeMenu();
       petEl.classList.add("pet--dragging");
       setActivityClass(null);
       clearTimeout(state.reactTimer);
@@ -466,7 +467,7 @@
     petEl.classList.remove("pet--dragging");
 
     if (!wasMoved) {
-      openDialog();
+      toggleMenu();
       return;
     }
     if (state.y < floorTop() - 3) {
@@ -596,6 +597,69 @@
     if (state.mode !== "falling" && state.mode !== "dragging") state.y = floorTop();
     place();
     if (dialogEl && dialogEl.classList.contains("dialog--open")) positionDialog();
+    if (menuEl && menuEl.classList.contains("pet-menu--open")) positionMenu();
+  });
+
+  // ---- 펫 메뉴: 클릭하면 곧장 위저드로 가지 않고 먼저 "뭐 만들지 물어볼지 /
+  // 그냥 인사만 할지" 고르게 하는 가벼운 팝오버(확장판 pet.js와 동일 로직) ----
+  let menuEl = null;
+  let menuAutoCloseTimer = null;
+  const MENU_GREETINGS = [
+    "안녕! 오늘도 반가워 >_<",
+    "그냥 놀러 왔구나, 좋아!",
+    "심심할 때 또 눌러줘!",
+    "네가 옆에 있으니 든든해",
+  ];
+
+  function buildMenu() {
+    menuEl = document.createElement("div");
+    menuEl.className = "pet-menu";
+    menuEl.innerHTML = `
+      <button type="button" class="pet-menu__btn pet-menu__btn--primary" data-action="wizard">💬 뭐 만들지 물어보기</button>
+      <button type="button" class="pet-menu__btn" data-action="greet">👋 인사만 할래</button>`;
+    menuEl.addEventListener("click", (e) => {
+      const btn = e.target.closest("button");
+      if (!btn) return;
+      closeMenu();
+      if (btn.dataset.action === "wizard") {
+        openDialog();
+      } else {
+        react(MENU_GREETINGS[Math.floor(Math.random() * MENU_GREETINGS.length)], "love");
+      }
+    });
+    layer.appendChild(menuEl);
+  }
+
+  function positionMenu() {
+    if (!menuEl) return;
+    const MW = Math.min(230, window.innerWidth - 24);
+    const centerX = state.x + W / 2;
+    const left = Math.max(8, Math.min(centerX - MW / 2, window.innerWidth - MW - 8));
+    menuEl.style.left = `${left}px`;
+    menuEl.style.width = `${MW}px`;
+    menuEl.style.bottom = `${window.innerHeight - state.y + 10}px`;
+  }
+
+  function openMenu() {
+    if (!menuEl) buildMenu();
+    positionMenu();
+    requestAnimationFrame(() => menuEl.classList.add("pet-menu--open"));
+    clearTimeout(menuAutoCloseTimer);
+    menuAutoCloseTimer = setTimeout(closeMenu, 6000);
+  }
+
+  function closeMenu() {
+    clearTimeout(menuAutoCloseTimer);
+    if (menuEl) menuEl.classList.remove("pet-menu--open");
+  }
+
+  function toggleMenu() {
+    if (menuEl && menuEl.classList.contains("pet-menu--open")) closeMenu();
+    else openMenu();
+  }
+
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && menuEl && menuEl.classList.contains("pet-menu--open")) closeMenu();
   });
 
   // ---- 대화창(위저드) ----
@@ -603,6 +667,7 @@
   let wiz = null;
 
   function openDialog() {
+    closeMenu();
     state.mode = "dialog";
     setActivityClass("pet--sitting");
     state.baseExpression = "happy";
