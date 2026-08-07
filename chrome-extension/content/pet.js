@@ -165,6 +165,11 @@
   zzzEl.textContent = "Zzz";
   bodyEl.appendChild(zzzEl);
 
+  // 이미지 위에 올라갔을 때 그 이미지의 대표색을 잠깐 덧입히는 "카멜레온" 연출용
+  const tintEl = document.createElement("div");
+  tintEl.className = "pet__tint";
+  bodyEl.appendChild(tintEl);
+
   // ---- 가챠로 뽑은 팔/다리 장착템 표시 ----
   // 해당 limb div의 자식으로 붙여서 걷기/점프 등 회전·위치를 그대로 물려받고,
   // 단일 색 블록이 아니라 아이템마다 다른 조각 구성(bandParts)으로 그려서
@@ -251,6 +256,10 @@
     reactTimer: null,
     fallFxTimer: null,
     climb: null, // 페이지 요소 위에 올라타 있는 동안의 진행 상태(stepClimb 참고)
+    nibble: null, // 짧은 텍스트를 냠냠 깨무는 동안의 진행 상태(stepNibble 참고)
+    watch: null, // 영상 앞에 앉아 구경하는 동안의 진행 상태(stepWatch 참고)
+    typing: null, // 빈 입력창 앞에서 타이핑 흉내를 내는 동안의 진행 상태(stepTyping 참고)
+    lastScrollY: window.scrollY,
   };
 
   function floorTop() {
@@ -279,6 +288,9 @@
     { type: "stretch", cls: "pet--stretching", weight: 1.2, min: 2, max: 3, expr: "happy" },
     { type: "wave", cls: "pet--waving", weight: 1.4, min: 1.5, max: 2.5, expr: "love" },
     { type: "climb", cls: "pet--walking", weight: 1.6, min: 0, max: 0, expr: "excited" },
+    { type: "nibble", cls: "pet--walking", weight: 1.3, min: 0, max: 0, expr: "excited" },
+    { type: "watch", cls: "pet--walking", weight: 1.0, min: 0, max: 0, expr: "happy" },
+    { type: "type", cls: "pet--walking", weight: 1.0, min: 0, max: 0, expr: "excited" },
     { type: "wiggle", cls: "pet--wiggling", weight: 1.2, min: 1.2, max: 2.2, expr: "excited" },
     { type: "tilt", cls: "pet--tilting", weight: 1.1, min: 1.6, max: 1.6, expr: "surprised" },
     { type: "sneeze", cls: "pet--sneezing", weight: 0.8, min: 0.9, max: 0.9, expr: "surprised" },
@@ -305,7 +317,8 @@
     standMax: 4,
   };
 
-  function findClimbTarget() {
+  function findClimbTarget(opts = {}) {
+    const exclude = opts.exclude;
     const floor = floorTop();
     const petCenterX = state.x + W / 2;
     const candidates = document.querySelectorAll(CLIMB.selector);
@@ -314,6 +327,7 @@
     let scanned = 0;
     for (const el of candidates) {
       if (scanned++ > CLIMB.maxScan) break;
+      if (exclude && exclude.has(el)) continue;
       const r = el.getBoundingClientRect();
       if (r.width < CLIMB.minWidth || r.height < 6) continue;
       if (r.top < 0 || r.bottom > window.innerHeight || r.left < 0 || r.right > window.innerWidth) continue;
@@ -332,10 +346,112 @@
     return best;
   }
 
+  // 이미지 위에 올라갔을 때 그 이미지 대표색을 뽑는다. 다른 도메인 이미지는
+  // CORS 헤더가 없으면 캔버스가 "오염"돼 읽기가 막히는데, 그건 그냥 색
+  // 연출을 건너뛰면 되는 문제라 실패해도 조용히 null만 돌려준다.
+  function sampleDominantColor(imgEl) {
+    try {
+      const c = document.createElement("canvas");
+      c.width = 8;
+      c.height = 8;
+      const ctx = c.getContext("2d");
+      ctx.drawImage(imgEl, 0, 0, 8, 8);
+      const data = ctx.getImageData(0, 0, 8, 8).data;
+      let r = 0, g = 0, b = 0, n = 0;
+      for (let i = 0; i < data.length; i += 4) {
+        if (data[i + 3] < 10) continue;
+        r += data[i];
+        g += data[i + 1];
+        b += data[i + 2];
+        n++;
+      }
+      if (!n) return null;
+      return `rgb(${Math.round(r / n)}, ${Math.round(g / n)}, ${Math.round(b / n)})`;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  // ---- 짧은 텍스트를 냠냠 깨물기 / 영상 구경 / 빈 입력창에서 타이핑 흉내 ----
+  // 셋 다 "화면에 보이는 대상 근처 바닥으로 걸어가서 뭔가 하고 돌아온다"는
+  // climb과 같은 결의 짧은 이벤트라, 대상만 다르고 흐름은 비슷하다.
+  function findTextTarget() {
+    const petCenterX = state.x + W / 2;
+    const candidates = document.querySelectorAll("p, li, a, span, strong, em, b, h1, h2, h3, h4");
+    let best = null;
+    let bestDist = Infinity;
+    let scanned = 0;
+    for (const el of candidates) {
+      if (scanned++ > CLIMB.maxScan) break;
+      if (el.children.length > 0) continue; // 자식 요소가 있는 큰 컨테이너 말고, 텍스트를 직접 담은 말단 요소만
+      const text = el.textContent && el.textContent.trim();
+      if (!text || text.length < 2 || text.length > 40) continue;
+      const r = el.getBoundingClientRect();
+      if (r.width < 20 || r.height < 10) continue;
+      if (r.top < 0 || r.bottom > window.innerHeight || r.left < 0 || r.right > window.innerWidth) continue;
+      const cx = r.left + r.width / 2;
+      const dist = Math.abs(cx - petCenterX);
+      if (dist > CLIMB.maxReachX || dist >= bestDist) continue;
+      best = { el, rect: r };
+      bestDist = dist;
+    }
+    return best;
+  }
+
+  function findVideoTarget() {
+    const petCenterX = state.x + W / 2;
+    const candidates = document.querySelectorAll("video");
+    let best = null;
+    let bestDist = Infinity;
+    for (const el of candidates) {
+      const r = el.getBoundingClientRect();
+      if (r.width < 120 || r.height < 80) continue;
+      if (r.bottom < 0 || r.top > window.innerHeight || r.right < 0 || r.left > window.innerWidth) continue;
+      const cx = Math.min(Math.max(r.left + r.width / 2, 0), window.innerWidth);
+      const dist = Math.abs(cx - petCenterX);
+      if (dist > CLIMB.maxReachX * 1.5 || dist >= bestDist) continue;
+      best = { el, rect: r };
+      bestDist = dist;
+    }
+    return best;
+  }
+
+  function findEmptyInputTarget() {
+    const petCenterX = state.x + W / 2;
+    const candidates = document.querySelectorAll(
+      'input[type="text"], input[type="search"], input:not([type]), textarea'
+    );
+    let best = null;
+    let bestDist = Infinity;
+    for (const el of candidates) {
+      if (el.value || el.disabled || el.readOnly) continue;
+      const r = el.getBoundingClientRect();
+      if (r.width < 60 || r.height < 16) continue;
+      if (r.top < 0 || r.bottom > window.innerHeight || r.left < 0 || r.right > window.innerWidth) continue;
+      const cx = r.left + r.width / 2;
+      const dist = Math.abs(cx - petCenterX);
+      if (dist > CLIMB.maxReachX || dist >= bestDist) continue;
+      best = { el, rect: r };
+      bestDist = dist;
+    }
+    return best;
+  }
+
   function cancelClimb() {
     if (!state.climb) return;
+    if (state.climb.tinted) tintEl.classList.remove("is-active");
     state.climb = null;
     state.y = floorTop();
+  }
+
+  // climb 말고도 페이지 요소를 대상으로 하는 짧은 이벤트가 셋(nibble/watch/type)
+  // 더 늘어서, 좌표를 무효화하는 리사이즈/스크롤/드래그 지점에서 한 번에 정리한다.
+  function cancelSideActivities() {
+    cancelClimb();
+    if (state.typing) petEl.classList.remove("pet--talking"); // stepTyping이 직접 켜둔 말풍선 정리
+    state.nibble = null;
+    state.watch = null;
+    state.typing = null;
   }
 
   // 밟고 있는 실제 페이지 요소를 살짝 눌렀다 놓기 - Web Animations API라
@@ -391,7 +507,25 @@
         c.phase = "onTop";
         c.standTimer = 0;
         bouncePlatform(c.el, 3); // 착지 반동: 밟힌 요소가 움찔
-        c.topAction = TOP_ACTIONS[Math.floor(Math.random() * TOP_ACTIONS.length)];
+
+        // 이미지 위라면 대표색을 잠깐 몸에 입힌다("카멜레온")
+        if (c.el.tagName === "IMG") {
+          const color = sampleDominantColor(c.el);
+          if (color) {
+            tintEl.style.backgroundColor = color;
+            tintEl.classList.add("is-active");
+            c.tinted = true;
+          }
+        }
+
+        // 가늘고 긴 요소(구분선, 내비게이션 바 등)는 서성이는 대신 팔을
+        // 벌리고 휘청휘청 균형 잡는 "줄타기"를 하도록 우대한다.
+        const isTightrope = platformRight - platformLeft > 220 && c.rect.height < 40;
+        c.topAction =
+          isTightrope && Math.random() < 0.7
+            ? "balance"
+            : TOP_ACTIONS[Math.floor(Math.random() * TOP_ACTIONS.length)];
+
         if (c.topAction === "stomp") {
           c.standDuration = 1.9;
           c.stompTimer = 0;
@@ -407,6 +541,12 @@
           c.standDuration = 3 + Math.random() * 1.5;
           setActivityClass("pet--sleeping");
           setExpression("sleepy");
+        } else if (c.topAction === "balance") {
+          c.standDuration = 2.4 + Math.random() * 1.3;
+          c.dir = Math.random() < 0.5 ? -1 : 1;
+          setActivityClass("pet--balancing");
+          setExpression("surprised");
+          spawnFx("휘청!");
         } else {
           c.standDuration = CLIMB.standMin + Math.random() * (CLIMB.standMax - CLIMB.standMin);
           c.dir = Math.random() < 0.5 ? -1 : 1;
@@ -455,6 +595,21 @@
       } else if (c.topAction === "nap") {
         state.y = platformY;
         place();
+      } else if (c.topAction === "balance") {
+        // 줄타기: pace보다 느리게, CSS 흔들림 애니메이션(pet--balancing)과
+        // 함께 왕복한다
+        let nx = state.x + c.dir * CLIMB.walkSpeed * 0.45 * dt;
+        if (nx <= leftBound) {
+          nx = leftBound;
+          c.dir = 1;
+        } else if (nx >= rightBound) {
+          nx = rightBound;
+          c.dir = -1;
+        }
+        petEl.classList.toggle("pet--flip", c.dir > 0);
+        state.x = nx;
+        state.y = platformY;
+        place();
       } else {
         // pace: 요소 폭 안에서 좌우로 서성인다
         let nx = state.x + c.dir * CLIMB.walkSpeed * 0.8 * dt;
@@ -472,10 +627,32 @@
       }
 
       if (c.standTimer >= c.standDuration) {
-        c.phase = "descend";
-        setActivityClass("pet--jumping");
-        setExpression("happy");
-        bouncePlatform(c.el, 2); // 뛰어내리는 반동
+        if (c.tinted) {
+          tintEl.classList.remove("is-active");
+          c.tinted = false;
+        }
+        // 징검다리 건너뛰기: 가끔(최대 2번) 근처의 다른 요소로 곧장
+        // 이어서 뛰어넘는다 — 매번 바닥까지 안 내려오고 파쿠르하듯 이동
+        const hopsSoFar = c.hopsSoFar || 0;
+        const next = hopsSoFar < 2 && Math.random() < 0.45 ? findClimbTarget({ exclude: c.visited }) : null;
+        if (next) {
+          const leavingEl = c.el;
+          c.visited = c.visited || new Set();
+          c.visited.add(c.el);
+          c.el = next.el;
+          c.rect = next.rect;
+          c.hopsSoFar = hopsSoFar + 1;
+          c.phase = "approach"; // 다음 요소를 향해 다시 걸어간 뒤 rise부터 반복
+          setActivityClass("pet--jumping");
+          setExpression("excited");
+          bouncePlatform(leavingEl, 2);
+          spawnFx("폴짝폴짝!");
+        } else {
+          c.phase = "descend";
+          setActivityClass("pet--jumping");
+          setExpression("happy");
+          bouncePlatform(c.el, 2); // 뛰어내리는 반동
+        }
       }
       return;
     }
@@ -491,6 +668,124 @@
         return;
       }
       place();
+    }
+  }
+
+  function stepNibble(dt) {
+    const n = state.nibble;
+    if (!n) return;
+    const targetX = clampX(n.rect.left + n.rect.width / 2 - W / 2);
+    if (n.phase === "approach") {
+      const dir = targetX >= state.x ? 1 : -1;
+      petEl.classList.toggle("pet--flip", dir > 0);
+      let nx = state.x + dir * CLIMB.walkSpeed * dt;
+      if ((dir > 0 && nx >= targetX) || (dir < 0 && nx <= targetX)) {
+        nx = targetX;
+        n.phase = "chomp";
+        n.timer = 0;
+        setActivityClass("pet--bowing");
+        setExpression("excited");
+        // 텍스트 자체는 안 바뀌고, 요소가 살짝 눌렸다 튀어오르는 "냠" 반응만 준다
+        try {
+          n.el.animate(
+            [
+              { transform: "scale(1)" },
+              { transform: "scale(0.9)" },
+              { transform: "scale(1.05)" },
+              { transform: "scale(1)" },
+            ],
+            { duration: 380, easing: "ease-out" }
+          );
+        } catch (_) {}
+        spawnFx("냠!");
+      }
+      state.x = nx;
+      state.y = floorTop();
+      place();
+      return;
+    }
+    n.timer += dt;
+    if (n.timer >= 0.6) {
+      state.nibble = null;
+      enterActivity(pickActivity());
+    }
+  }
+
+  function stepWatch(dt) {
+    const w = state.watch;
+    if (!w) return;
+    const cx = Math.min(Math.max(w.rect.left + w.rect.width / 2, 0), window.innerWidth);
+    const targetX = clampX(cx - W / 2);
+    if (w.phase === "approach") {
+      const dir = targetX >= state.x ? 1 : -1;
+      petEl.classList.toggle("pet--flip", dir > 0);
+      let nx = state.x + dir * CLIMB.walkSpeed * dt;
+      if ((dir > 0 && nx >= targetX) || (dir < 0 && nx <= targetX)) {
+        nx = targetX;
+        w.phase = "watching";
+        w.timer = 0;
+        w.duration = 3 + Math.random() * 2;
+        w.nextReact = 1 + Math.random();
+        setActivityClass("pet--sitting");
+        setExpression("happy");
+      }
+      state.x = nx;
+      state.y = floorTop();
+      place();
+      return;
+    }
+    w.timer += dt;
+    if (w.timer >= w.nextReact) {
+      w.nextReact = w.timer + 1.2 + Math.random() * 1.5;
+      spawnFx(Math.random() < 0.5 ? "♥" : "!");
+      setExpression("love");
+      setTimeout(() => {
+        if (state.activity === "watch") setExpression("happy");
+      }, 500);
+    }
+    if (w.timer >= w.duration) {
+      state.watch = null;
+      enterActivity(pickActivity());
+    }
+  }
+
+  const TYPE_CHARS = "abcdefghijklmnopqrstuvwxyz    ";
+  function stepTyping(dt) {
+    const t = state.typing;
+    if (!t) return;
+    const targetX = clampX(t.rect.left + t.rect.width / 2 - W / 2);
+    if (t.phase === "approach") {
+      const dir = targetX >= state.x ? 1 : -1;
+      petEl.classList.toggle("pet--flip", dir > 0);
+      let nx = state.x + dir * CLIMB.walkSpeed * dt;
+      if ((dir > 0 && nx >= targetX) || (dir < 0 && nx <= targetX)) {
+        nx = targetX;
+        t.phase = "typing";
+        t.timer = 0;
+        t.duration = 2.4;
+        t.buf = "";
+        t.nextKey = 0;
+        setActivityClass("pet--sitting");
+        setExpression("excited");
+        bubbleEl.textContent = "";
+        petEl.classList.add("pet--talking");
+      }
+      state.x = nx;
+      state.y = floorTop();
+      place();
+      return;
+    }
+    t.timer += dt;
+    if (t.timer >= t.nextKey) {
+      t.nextKey = t.timer + 0.08 + Math.random() * 0.09;
+      t.buf += TYPE_CHARS[Math.floor(Math.random() * TYPE_CHARS.length)];
+      if (t.buf.length > 10) t.buf = t.buf.slice(-10);
+      bubbleEl.textContent = t.buf + "_";
+    }
+    if (t.timer >= t.duration) {
+      petEl.classList.remove("pet--talking");
+      state.typing = null;
+      enterActivity(pickActivity());
     }
   }
 
@@ -513,13 +808,35 @@
       state.activity = "climb";
       state.activityTimer = 0;
       state.activityDuration = Infinity; // stepClimb가 다 끝나면 알아서 다음 행동을 고른다
-      state.climb = { el: target.el, rect: target.rect, phase: "approach" };
+      state.climb = { el: target.el, rect: target.rect, phase: "approach", visited: new Set([target.el]) };
       setActivityClass("pet--walking");
       state.baseExpression = "excited";
       setExpression("excited");
       return;
     }
+    if (a.type === "nibble" || a.type === "watch" || a.type === "type") {
+      const finder = a.type === "nibble" ? findTextTarget : a.type === "watch" ? findVideoTarget : findEmptyInputTarget;
+      const target = finder();
+      if (!target) {
+        enterActivity(ACTIVITIES[0]); // 근처에 대상이 없으면 그냥 걷기
+        return;
+      }
+      state.activity = a.type;
+      state.activityTimer = 0;
+      state.activityDuration = Infinity; // stepNibble/stepWatch/stepTyping이 끝나면 알아서 다음 행동을 고른다
+      const payload = { el: target.el, rect: target.rect, phase: "approach" };
+      if (a.type === "nibble") state.nibble = payload;
+      else if (a.type === "watch") state.watch = payload;
+      else state.typing = payload;
+      setActivityClass("pet--walking");
+      state.baseExpression = a.expr;
+      setExpression(a.expr);
+      return;
+    }
     state.climb = null;
+    state.nibble = null;
+    state.watch = null;
+    state.typing = null;
     state.activity = a.type;
     state.activityTimer = 0;
     state.activityDuration = a.min + Math.random() * (a.max - a.min);
@@ -700,7 +1017,7 @@
     if (!drag.moved && dist > DRAG_THRESHOLD) {
       drag.moved = true;
       state.mode = "dragging";
-      cancelClimb();
+      cancelSideActivities();
       closeMenu();
       petEl.classList.add("pet--dragging");
       setActivityClass(null);
@@ -854,6 +1171,12 @@
         petEl.classList.toggle("pet--flip", state.dx > 0);
       } else if (state.activity === "climb") {
         stepClimb(dt);
+      } else if (state.activity === "nibble") {
+        stepNibble(dt);
+      } else if (state.activity === "watch") {
+        stepWatch(dt);
+      } else if (state.activity === "type") {
+        stepTyping(dt);
       } else if (state.activity === "look") {
         // 두리번: 0.6초마다 좌우 방향을 번갈아 본다 (CSS만으론 flip을 못 바꿔서 JS로)
         petEl.classList.toggle("pet--flip", Math.floor(state.activityTimer / 0.6) % 2 === 1);
@@ -867,17 +1190,27 @@
   // 복잡하게 다시 계산하지 않고 그냥 바닥으로 되돌린다.
   window.addEventListener("resize", () => {
     state.x = clampX(state.x);
-    cancelClimb();
+    cancelSideActivities();
     if (state.mode !== "falling" && state.mode !== "dragging") state.y = floorTop();
     place();
     if (dialogEl && dialogEl.classList.contains("dialog--open")) positionDialog();
     if (menuEl && menuEl.classList.contains("pet-menu--open")) positionMenu();
   });
+  // 스크롤 자체를 "어어!" 하고 휘청하는 반응으로 살려둔다 — 밟고 있던 요소가
+  // 있었다면 좌표가 무효화되니 정리하되, 밋밋하게 뚝 떨어뜨리지 않는다.
   window.addEventListener(
     "scroll",
     () => {
-      if (!state.climb) return;
-      cancelClimb();
+      const dy = window.scrollY - state.lastScrollY;
+      state.lastScrollY = window.scrollY;
+      if (state.mode === "roam" && Math.abs(dy) > 4) {
+        petEl.classList.remove("pet--scroll-wobble-up", "pet--scroll-wobble-down");
+        void petEl.offsetWidth; // 리플로우: 같은 클래스를 다시 넣어도 애니메이션이 재생되게
+        petEl.classList.add(dy > 0 ? "pet--scroll-wobble-down" : "pet--scroll-wobble-up");
+      }
+      const wasOnSomething = state.climb || state.nibble || state.watch || state.typing;
+      if (!wasOnSomething) return;
+      cancelSideActivities();
       place();
       enterActivity(pickActivity());
     },
@@ -956,7 +1289,7 @@
   function openDialog() {
     closeMenu();
     state.mode = "dialog";
-    cancelClimb();
+    cancelSideActivities();
     place();
     setActivityClass("pet--sitting");
     state.baseExpression = "happy";

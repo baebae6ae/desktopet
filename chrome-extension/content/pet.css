@@ -44,6 +44,22 @@
   position: relative;
   width: 100%;
   height: 100%;
+  isolation: isolate; /* pet__tint의 mix-blend-mode가 페이지가 아니라 펫 안에서만 섞이게 */
+}
+
+/* 이미지 위에 올라갔을 때 그 이미지 대표색을 잠깐 덧입히는 "카멜레온" 오버레이 */
+.pet__tint {
+  position: absolute;
+  inset: 0;
+  border-radius: 6px;
+  background-color: transparent;
+  opacity: 0;
+  transition: opacity 0.35s ease;
+  pointer-events: none;
+  mix-blend-mode: multiply;
+}
+.pet__tint.is-active {
+  opacity: 0.4;
 }
 
 .pet__sprite {
@@ -382,6 +398,36 @@
 /* ---------------- 두리번거리기 ----------------
    좌우 방향 전환(pet--flip)은 JS가 토글하고, 몸은 숨쉬기만 살짝 */
 .pet--looking .pet__body { animation: pet-breathe 1.2s ease-in-out infinite; }
+
+/* ---------------- 줄타기(가늘고 긴 요소 위에서 균형 잡기) ---------------- */
+@keyframes pet-balance-wobble {
+  0%, 100% { rotate: -7deg; }
+  50% { rotate: 7deg; }
+}
+.pet--balancing .pet__body {
+  transform-origin: 50% 90%;
+  animation: pet-balance-wobble 0.9s ease-in-out infinite;
+}
+
+/* ---------------- 스크롤 서핑: 스크롤 방향에 맞춰 잠깐 휘청 ---------------- */
+@keyframes pet-scroll-wobble-down {
+  0% { rotate: 0deg; }
+  30% { rotate: -10deg; }
+  100% { rotate: 0deg; }
+}
+@keyframes pet-scroll-wobble-up {
+  0% { rotate: 0deg; }
+  30% { rotate: 10deg; }
+  100% { rotate: 0deg; }
+}
+.pet--scroll-wobble-down .pet__body {
+  transform-origin: 50% 88%;
+  animation: pet-scroll-wobble-down 0.35s ease-out 1;
+}
+.pet--scroll-wobble-up .pet__body {
+  transform-origin: 50% 88%;
+  animation: pet-scroll-wobble-up 0.35s ease-out 1;
+}
 
 /* ---------------- 낙하(꺄아악) ---------------- */
 /* 낙하: 더 격렬하게 - 크게 휘청이는 회전 + 잘게 떠는 진동을 동시에 건다 */
@@ -836,6 +882,7 @@
   .pet__bubble,
   .pet__zzz,
   .pet__shadow,
+  .pet__tint,
   .dialog,
   .pet-menu { animation: none !important; transition: none !important; }
 }
