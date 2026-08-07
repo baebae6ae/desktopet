@@ -38,28 +38,14 @@
     return;
   }
 
-  // ---- 설정(켜짐 여부/숨긴 사이트/종족) ----
-  const store = await chrome.storage.local.get(["enabled", "species", "disabledSites"]);
+  // ---- 설정(켜짐 여부/종족) ----
+  // 사이트별 허용 여부는 이제 우리 스토리지가 아니라 크롬의 실제 권한
+  // 시스템(optional_host_permissions)이 관리한다: 이 스크립트가 실행되고
+  // 있다는 것 자체가 이미 이 사이트에 대한 권한을 받았다는 뜻이라 별도
+  // 허용목록 검사가 필요 없다. 팝업에서 권한을 회수하면 background.js가
+  // 아래 onMessage로 "정리해"라고 알려준다.
+  const store = await chrome.storage.local.get(["enabled", "species"]);
   if (store.enabled === false) return;
-
-  // 설치 직후 아무 데도 안 보이면 존재 자체를 못 느끼고 바로 삭제당한다.
-  // 그래서 기본은 모든 사이트에서 보이고, 팝업에서 "이 사이트에서 숨기기"를
-  // 켠 곳만 예외로 안 뜨는 방식(옵트아웃)으로 바꿨다.
-  const isSiteHidden = (list) => Array.isArray(list) && list.includes(location.hostname);
-  if (isSiteHidden(store.disabledSites)) {
-    // 이 페이지가 열려있는 동안 팝업에서 "이 사이트에서 숨기기"를 끄면
-    // 새로고침 없이 바로 나타나도록 목록 변경을 기다린다.
-    await new Promise((resolve) => {
-      function onDisabledSitesChange(changes, area) {
-        if (area !== "local" || !changes.disabledSites) return;
-        if (!isSiteHidden(changes.disabledSites.newValue)) {
-          chrome.storage.onChanged.removeListener(onDisabledSitesChange);
-          resolve();
-        }
-      }
-      chrome.storage.onChanged.addListener(onDisabledSitesChange);
-    });
-  }
 
   const speciesDef = sprites.SPECIES_MAP[store.species] || sprites.SPECIES[0];
 
@@ -1349,13 +1335,16 @@
     return { reset };
   }
 
-  // 팝업(켜기/끄기, 허용 사이트 목록)에서 상태 변경 시 반영
+  // 팝업에서 이 사이트의 권한을 회수하면 background.js가 이 메시지를 보낸다
+  // (권한이 사라진 뒤라 스토리지 감시만으로는 스스로 알 방법이 없다).
+  chrome.runtime.onMessage.addListener((msg) => {
+    if (msg && msg.type === "nch-permission-revoked") host.remove();
+  });
+
+  // 팝업(켜기/끄기 등)에서 상태 변경 시 반영
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== "local") return;
     if (changes.enabled && changes.enabled.newValue === false) {
-      host.remove();
-    }
-    if (changes.disabledSites && isSiteHidden(changes.disabledSites.newValue)) {
       host.remove();
     }
     // 팝업에서 가챠로 새 아이템을 장착/해제하면 새로고침 없이 바로 반영

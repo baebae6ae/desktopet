@@ -18,17 +18,33 @@ function showHint(msg) {
   hintEl.textContent = msg || "";
 }
 
-function normalizeList(list) {
-  return Array.isArray(list) ? list : [];
+// 사이트별 권한은 이제 우리 스토리지가 아니라 크롬의 실제
+// optional_host_permissions로 관리한다: 설치 시점엔 아무 권한도 없고,
+// 사용자가 이 토글을 켠 사이트에만 그때그때 permissions.request로 권한을
+// 받는다(스토어 설치 화면의 "모든 사이트" 경고 없이, 사이트 하나짜리 작은
+// 확인창만 뜬다).
+// optional_host_permissions에 "http://*/*"와 "https://*/*"를 각각 선언해뒀는데,
+// 크롬은 permissions.request()에 넘긴 패턴이 그 선언과 스킴까지 정확히 겹쳐야
+// 통과시킨다("*://호스트/*" 같은 스킴 와일드카드는 부분집합으로 안 쳐준다) —
+// 그래서 항상 http/https 두 패턴을 한 쌍으로 요청/해제한다.
+function toMatchPatterns(host) {
+  return [`http://${host}/*`, `https://${host}/*`];
 }
 
-// disabledSites: 펫을 숨긴 사이트 목록(옵트아웃). 기본은 모든 사이트에서
-// 보이고, 여기 들어간 사이트에서만 예외로 안 보인다.
-function renderSiteList(list) {
-  const sites = normalizeList(list);
+function hostFromPattern(pattern) {
+  const m = /^https?:\/\/([^/]+)\/\*$/.exec(pattern);
+  return m ? m[1] : pattern;
+}
+
+async function grantedHosts() {
+  const { origins } = await chrome.permissions.getAll();
+  return [...new Set((origins || []).map(hostFromPattern))];
+}
+
+function renderSiteList(hosts) {
   siteListEl.innerHTML = "";
-  siteListEmptyEl.style.display = sites.length ? "none" : "block";
-  for (const host of sites) {
+  siteListEmptyEl.style.display = hosts.length ? "none" : "block";
+  for (const host of hosts) {
     const li = document.createElement("li");
     li.className = "site-row";
     const span = document.createElement("span");
@@ -36,37 +52,56 @@ function renderSiteList(list) {
     const removeBtn = document.createElement("button");
     removeBtn.type = "button";
     removeBtn.textContent = "✕";
-    removeBtn.setAttribute("aria-label", `${host}에서 다시 보이기`);
-    removeBtn.addEventListener("click", () => setSiteVisible(host, true));
+    removeBtn.setAttribute("aria-label", `${host} 권한 해제`);
+    removeBtn.addEventListener("click", () => setSiteAllowed(host, false));
     li.append(span, removeBtn);
     siteListEl.appendChild(li);
   }
   if (currentHost) {
-    currentSiteToggleEl.checked = !sites.includes(currentHost);
+    currentSiteToggleEl.checked = hosts.includes(currentHost);
   }
 }
 
-async function setSiteVisible(host, visible) {
-  const { disabledSites } = await chrome.storage.local.get(["disabledSites"]);
-  const sites = new Set(normalizeList(disabledSites));
-  if (visible) sites.delete(host);
-  else sites.add(host);
-  const next = [...sites];
-  await chrome.storage.local.set({ disabledSites: next });
-  renderSiteList(next);
+async function refreshSiteList() {
+  renderSiteList(await grantedHosts());
+}
+
+// 권한 해제 전에(살아있는 동안) 그 사이트의 열린 탭들에 "정리해" 메시지를
+// 먼저 보낸 뒤 권한을 회수한다 — 회수 후엔 그 탭들을 다시 찾을 방법이 없다.
+async function setSiteAllowed(host, allow) {
+  const patterns = toMatchPatterns(host);
+  if (allow) {
+    let granted = false;
+    try {
+      granted = await chrome.permissions.request({ origins: patterns });
+    } catch (_) {
+      granted = false;
+    }
+    await refreshSiteList();
+    return granted;
+  }
+  try {
+    const tabs = await chrome.tabs.query({ url: patterns });
+    for (const tab of tabs) {
+      if (tab.id) chrome.tabs.sendMessage(tab.id, { type: "nch-permission-revoked" }).catch(() => {});
+    }
+  } catch (_) {
+    // 무시 — 메시지 전달은 최선 노력일 뿐, 다음 탐색부터는 등록 자체가 해제된다
+  }
+  await chrome.permissions.remove({ origins: patterns });
+  await refreshSiteList();
+  return true;
 }
 
 async function detectCurrentHost() {
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab || !tab.id) return null;
-    const [{ result }] = await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      func: () => location.hostname,
-    });
-    return result || null;
-  } catch (err) {
-    // chrome://, 웹스토어, PDF 뷰어 등 스크립트를 심을 수 없는 페이지
+    if (!tab || !tab.url) return null;
+    const u = new URL(tab.url);
+    if (u.protocol !== "http:" && u.protocol !== "https:") return null;
+    return u.hostname;
+  } catch (_) {
+    // chrome://, 웹스토어, PDF 뷰어 등 호스트가 없는 특수 페이지
     return null;
   }
 }
@@ -80,10 +115,9 @@ function renderAffection(points) {
 }
 
 async function init() {
-  const { enabled, species, disabledSites, petName, affection } = await chrome.storage.local.get([
+  const { enabled, species, petName, affection } = await chrome.storage.local.get([
     "enabled",
     "species",
-    "disabledSites",
     "petName",
     "affection",
   ]);
@@ -98,7 +132,7 @@ async function init() {
     currentSiteRowEl.hidden = false;
     currentSiteHostEl.textContent = currentHost;
   }
-  renderSiteList(disabledSites);
+  await refreshSiteList();
 }
 init();
 
@@ -123,14 +157,22 @@ speciesEl.addEventListener("change", () => {
   showHint("캐릭터 변경은 새로고침 후 적용돼요.");
 });
 
-currentSiteToggleEl.addEventListener("change", () => {
+currentSiteToggleEl.addEventListener("change", async () => {
   if (!currentHost) return;
-  setSiteVisible(currentHost, currentSiteToggleEl.checked);
-  showHint(
-    currentSiteToggleEl.checked
-      ? `${currentHost}에서 펫이 보여요.`
-      : `${currentHost}에서 펫을 숨겼어요.`
-  );
+  const wantOn = currentSiteToggleEl.checked;
+  if (wantOn) {
+    showHint("허용 여부를 확인해주세요...");
+    const granted = await setSiteAllowed(currentHost, true);
+    if (granted) {
+      showHint(`${currentHost}에서 펫이 보여요! (새로고침 없이 바로 나타나요)`);
+    } else {
+      currentSiteToggleEl.checked = false;
+      showHint("권한을 허용해야 이 사이트에서 펫이 보여요.");
+    }
+  } else {
+    await setSiteAllowed(currentHost, false);
+    showHint(`${currentHost}에서 펫을 숨겼어요.`);
+  }
 });
 
 /* ================= 탭 전환 ================= */
