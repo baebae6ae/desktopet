@@ -170,6 +170,18 @@
   tintEl.className = "pet__tint";
   bodyEl.appendChild(tintEl);
 
+  // 미니게임용 장비/오라. 몸통(.pet__body) 애니메이션과 싸우지 않도록 각각
+  // 독립된 자식 요소로 두고, 게임 클래스(pet--armed 등)로 보이기만 토글한다.
+  const gunEl = document.createElement("div");
+  gunEl.className = "pet__gun";
+  bodyEl.appendChild(gunEl);
+  const kartEl = document.createElement("div");
+  kartEl.className = "pet__kart";
+  bodyEl.appendChild(kartEl);
+  const auraEl = document.createElement("div");
+  auraEl.className = "pet__aura";
+  bodyEl.appendChild(auraEl);
+
   // ---- 가챠로 뽑은 팔/다리 장착템 표시 ----
   // 해당 limb div의 자식으로 붙여서 걷기/점프 등 회전·위치를 그대로 물려받고,
   // 단일 색 블록이 아니라 아이템마다 다른 조각 구성(bandParts)으로 그려서
@@ -291,6 +303,7 @@
     { type: "nibble", cls: "pet--walking", weight: 1.3, min: 0, max: 0, expr: "excited" },
     { type: "watch", cls: "pet--walking", weight: 1.0, min: 0, max: 0, expr: "happy" },
     { type: "type", cls: "pet--walking", weight: 1.0, min: 0, max: 0, expr: "excited" },
+    { type: "game", cls: "pet--walking", weight: 1.4, min: 0, max: 0, expr: "excited" },
     { type: "wiggle", cls: "pet--wiggling", weight: 1.2, min: 1.2, max: 2.2, expr: "excited" },
     { type: "tilt", cls: "pet--tilting", weight: 1.1, min: 1.6, max: 1.6, expr: "surprised" },
     { type: "sneeze", cls: "pet--sneezing", weight: 0.8, min: 0.9, max: 0.9, expr: "surprised" },
@@ -789,6 +802,457 @@
     }
   }
 
+  // ============================================================
+  // ---- 미니게임 4종 (귀여운 외모 ↔ 액션 장르의 갭) ----
+  // 공통 설계: 실패로 손해 보는 구조를 만들지 않는다. 가만히 둬도 펫이 알아서
+  // 진행하고, 사용자가 끼어들면(표적 클릭 / 드래그 / 연타) 연출이 더 화려해지고
+  // 코인을 더 받는 "참여할수록 이득" 구조다. 소리는 여전히 재생하지 않고
+  // 텍스트+CSS로만 표현한다.
+  // 랜덤으로도 뜨고(ACTIVITIES의 game), 펫 메뉴 → 같이 놀기에서 직접 고를 수도 있다.
+  // ============================================================
+  const GAMES = [
+    { id: "bubble", label: "🫧 버블건 사격", desc: "떠오르는 표적을 눌러 조준!" },
+    { id: "kart", label: "🏎️ 카트 드리프트", desc: "드래그해서 드리프트 궤적을!" },
+    { id: "hero", label: "⚡ 히어로 변신", desc: "연타로 변신 게이지를 채워요" },
+    { id: "survival", label: "⚔️ 서바이벌 웨이브", desc: "몰려오는 적을 같이 물리쳐요" },
+  ];
+  const GAME_BODY_CLASSES = ["pet--armed", "pet--kart", "pet--charging", "pet--hero", "pet--battle", "pet--recoil"];
+
+  const game = { type: null, timer: 0, duration: 0, score: 0, coins: 0, entities: [], data: null };
+
+  function gameActive() {
+    return game.type !== null;
+  }
+  function addGameEntity(el) {
+    game.entities.push(el);
+    layer.appendChild(el);
+    return el;
+  }
+  function clearGameEntities() {
+    for (const el of game.entities) el.remove();
+    game.entities.length = 0;
+  }
+  function liveEntities(cls) {
+    return game.entities.filter((e) => e.isConnected && e.classList.contains(cls) && !e.dataset.dead);
+  }
+  function petCenter() {
+    const b = petEl.getBoundingClientRect();
+    return { x: b.left + b.width / 2, y: b.top + b.height / 2, top: b.top, bottom: b.bottom };
+  }
+
+  // ---- 화려함 담당: 공용 이펙트 ----
+  function fxBurst(cx, cy, color, count = 12, spread = 64) {
+    if (prefersReduced) return;
+    const wrap = document.createElement("div");
+    wrap.className = "gfx gfx-burst";
+    wrap.style.left = `${cx}px`;
+    wrap.style.top = `${cy}px`;
+    for (let i = 0; i < count; i++) {
+      const p = document.createElement("span");
+      const angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.5;
+      const dist = spread * (0.55 + Math.random() * 0.75);
+      p.style.setProperty("--tx", `${Math.cos(angle) * dist}px`);
+      p.style.setProperty("--ty", `${Math.sin(angle) * dist}px`);
+      p.style.setProperty("--d", `${Math.random() * 0.09}s`);
+      p.style.backgroundColor = color;
+      wrap.appendChild(p);
+    }
+    layer.appendChild(wrap);
+    setTimeout(() => wrap.remove(), 1000);
+  }
+  function fxRing(cx, cy, color, size = 90) {
+    if (prefersReduced) return;
+    const r = document.createElement("div");
+    r.className = "gfx gfx-ring";
+    r.style.left = `${cx}px`;
+    r.style.top = `${cy}px`;
+    r.style.borderColor = color;
+    r.style.setProperty("--ring", `${size}px`);
+    layer.appendChild(r);
+    setTimeout(() => r.remove(), 640);
+  }
+  function fxFlash(color) {
+    if (prefersReduced) return;
+    const f = document.createElement("div");
+    f.className = "gfx gfx-flash";
+    f.style.backgroundColor = color;
+    layer.appendChild(f);
+    setTimeout(() => f.remove(), 440);
+  }
+  function fxScore(cx, cy, text, tone) {
+    const t = document.createElement("div");
+    t.className = `gfx gfx-score${tone ? ` gfx-score--${tone}` : ""}`;
+    t.style.left = `${cx}px`;
+    t.style.top = `${cy}px`;
+    t.textContent = text;
+    layer.appendChild(t);
+    setTimeout(() => t.remove(), 1000);
+  }
+  function recoil() {
+    petEl.classList.remove("pet--recoil");
+    void petEl.offsetWidth; // 리플로우: 같은 클래스를 다시 넣어도 애니메이션이 재생되게
+    petEl.classList.add("pet--recoil");
+  }
+
+  // ---- 1. 버블건 사격전 ----
+  // 표적을 클릭하면 펫이 그쪽으로 홱 조준해 쏜다(사용자가 "포수" 역할).
+  // 안 눌러도 펫이 가끔 알아서 쏘기 때문에 구경만 해도 굴러간다.
+  const BUBBLE_GLYPHS = ["🎈", "⭐", "🫧", "💠", "🍬"];
+  function startBubble() {
+    game.duration = 11;
+    game.data = { spawnTimer: 0, autoTimer: 0, maxTargets: 4 };
+    petEl.classList.add("pet--armed");
+    setActivityClass("pet--sitting");
+    setExpression("excited");
+    const pc = petCenter();
+    spawnFx("버블건 장전!", { impact: true });
+    fxRing(pc.x, pc.y, "#8fe9ff", 130);
+  }
+  function spawnBubbleTarget() {
+    const el = document.createElement("button");
+    el.type = "button";
+    el.className = "gtarget";
+    el.textContent = BUBBLE_GLYPHS[Math.floor(Math.random() * BUBBLE_GLYPHS.length)];
+    el.style.left = `${30 + Math.random() * Math.max(1, window.innerWidth - 100)}px`;
+    el.style.top = `${60 + Math.random() * Math.max(1, window.innerHeight * 0.5)}px`;
+    el.style.setProperty("--float", `${2 + Math.random() * 1.6}s`);
+    el.addEventListener("click", (e) => {
+      e.stopPropagation();
+      shootAt(el);
+    });
+    addGameEntity(el);
+  }
+  function shootAt(targetEl) {
+    if (targetEl.dataset.dead) return;
+    targetEl.dataset.dead = "1";
+    const pc = petCenter();
+    const tb = targetEl.getBoundingClientRect();
+    const tx = tb.left + tb.width / 2;
+    const ty = tb.top + tb.height / 2;
+    const muzzleY = pc.top + 18;
+    petEl.classList.toggle("pet--flip", tx > pc.x);
+    recoil();
+    fxRing(pc.x, muzzleY, "#8fe9ff", 58);
+
+    const bullet = document.createElement("div");
+    bullet.className = "gbullet";
+    bullet.style.left = `${pc.x}px`;
+    bullet.style.top = `${muzzleY}px`;
+    bullet.style.setProperty("--dx", `${tx - pc.x}px`);
+    bullet.style.setProperty("--dy", `${ty - muzzleY}px`);
+    layer.appendChild(bullet);
+
+    setTimeout(() => {
+      bullet.remove();
+      targetEl.classList.add("is-pop");
+      fxBurst(tx, ty, "#8fe9ff", 14, 74);
+      fxBurst(tx, ty, "#ffffff", 8, 46);
+      fxRing(tx, ty, "#ffffff", 84);
+      fxScore(tx, ty - 12, "+2 🪙", "cyan");
+      game.score++;
+      game.coins += 2;
+      setTimeout(() => targetEl.remove(), 260);
+    }, 240);
+  }
+  function stepBubble(dt) {
+    const d = game.data;
+    d.spawnTimer -= dt;
+    if (d.spawnTimer <= 0 && liveEntities("gtarget").length < d.maxTargets) {
+      d.spawnTimer = 0.75 + Math.random() * 0.6;
+      spawnBubbleTarget();
+    }
+    d.autoTimer += dt;
+    if (d.autoTimer > 2.6) {
+      d.autoTimer = 0;
+      const t = liveEntities("gtarget")[0];
+      if (t) shootAt(t);
+    }
+  }
+
+  // ---- 2. 카트 드리프트 ----
+  // 평소보다 훨씬 빠르게 질주하며 궤적을 남긴다. 드래그하면 그 순간엔
+  // 더 뜨거운 궤적이 그려지고, 놓을 때 속도가 빠를수록 화려한 스핀이 터진다.
+  // 카트 몸체와 바퀴가 펫 발밑보다 아래로 튀어나오는 만큼, 카트 모드에서는
+  // 펫을 살짝 띄워야 바퀴가 화면 밖으로 잘리지 않는다.
+  const KART_LIFT = 14;
+  function kartFloor() {
+    return Math.max(0, floorTop() - KART_LIFT);
+  }
+  function startKart() {
+    game.duration = 10;
+    game.data = { trailTimer: 0 };
+    petEl.classList.add("pet--kart");
+    setActivityClass(null);
+    setExpression("excited");
+    state.dx = (Math.random() < 0.5 ? -1 : 1) * 190;
+    spawnFx("부아아앙!!", { impact: true });
+    fxFlash("rgba(255,176,60,0.22)");
+  }
+  function spawnKartTrail(hot) {
+    if (prefersReduced) return;
+    const pc = petCenter();
+    const t = document.createElement("div");
+    t.className = `gtrail${hot ? " gtrail--hot" : ""}`;
+    t.style.left = `${pc.x}px`;
+    t.style.top = `${pc.bottom - 8}px`;
+    layer.appendChild(t);
+    setTimeout(() => t.remove(), 620);
+  }
+  function kartSpin(power) {
+    const pc = petCenter();
+    fxBurst(pc.x, pc.y, "#ffb03c", 10 + Math.round(power * 14), 60 + power * 70);
+    fxRing(pc.x, pc.y, "#ffb03c", 90 + power * 90);
+    if (power > 0.55) {
+      fxFlash("rgba(255,176,60,0.2)");
+      fxRing(pc.x, pc.y, "#ffffff", 150);
+      spawnFx("드리프트 대성공!!", { impact: true });
+    } else {
+      spawnFx("끼이익!");
+    }
+    const gain = 2 + Math.round(power * 6);
+    game.coins += gain;
+    fxScore(pc.x, pc.top - 10, `+${gain} 🪙`, "amber");
+  }
+  function stepKart(dt) {
+    const d = game.data;
+    let nx = state.x + state.dx * dt;
+    if (nx <= 0 || nx >= window.innerWidth - W) {
+      state.dx *= -1;
+      nx = clampX(nx);
+      const pc = petCenter();
+      fxBurst(pc.x, pc.y, "#ffb03c", 12, 62);
+      fxScore(pc.x, pc.top - 6, "+3 🪙", "amber");
+      game.coins += 3;
+      spawnFx("끼익!");
+    }
+    state.x = nx;
+    state.y = kartFloor();
+    place();
+    petEl.classList.toggle("pet--flip", state.dx > 0);
+    d.trailTimer += dt;
+    if (d.trailTimer > 0.05) {
+      d.trailTimer = 0;
+      spawnKartTrail(false);
+    }
+  }
+
+  // ---- 3. 히어로 변신 ----
+  // 게이지가 저절로도 차지만, 펫을 연타하면 훨씬 빨리 차고 파티클이 터진다.
+  // 다 차면 화면이 번쩍하며 변신 — 못 채워도 시간이 되면 알아서 변신한다.
+  function startHero() {
+    game.duration = 9;
+    game.data = { charge: 0, done: false, pTimer: 0 };
+    petEl.classList.add("pet--charging");
+    setActivityClass("pet--sitting");
+    setExpression("excited");
+    spawnFx("변신... 준비...", { impact: true });
+    const g = document.createElement("div");
+    g.className = "ggauge";
+    g.innerHTML = `<div class="ggauge__fill"></div><div class="ggauge__label">연타!</div>`;
+    addGameEntity(g);
+    game.data.gaugeEl = g;
+    game.data.fillEl = g.querySelector(".ggauge__fill");
+  }
+  function heroTap() {
+    const d = game.data;
+    if (!d || d.done) return;
+    d.charge = Math.min(1, d.charge + 0.12);
+    const pc = petCenter();
+    fxRing(pc.x, pc.y, "#ffd23c", 72);
+    fxBurst(pc.x, pc.y, "#ffd23c", 6, 42);
+    if (d.charge >= 1) heroTransform();
+  }
+  function heroTransform() {
+    const d = game.data;
+    if (d.done) return;
+    d.done = true;
+    d.charge = 1;
+    petEl.classList.remove("pet--charging");
+    petEl.classList.add("pet--hero");
+    if (d.gaugeEl) d.gaugeEl.remove();
+    const pc = petCenter();
+    fxFlash("rgba(255,255,255,0.5)");
+    fxRing(pc.x, pc.y, "#ffd23c", 210);
+    fxRing(pc.x, pc.y, "#ffffff", 145);
+    fxBurst(pc.x, pc.y, "#ffd23c", 22, 132);
+    fxBurst(pc.x, pc.y, "#ffffff", 14, 92);
+    spawnFx("변신 완료!!", { impact: true });
+    game.coins += 12;
+    fxScore(pc.x, pc.top - 14, "+12 🪙", "gold");
+    game.timer = Math.max(game.timer, game.duration - 2.4); // 변신 후 잠깐 폼 잡고 종료
+  }
+  function stepHero(dt) {
+    const d = game.data;
+    const pc = petCenter();
+    if (!d.done) {
+      d.charge = Math.min(1, d.charge + dt * 0.1); // 안 눌러도 천천히 알아서 찬다
+      if (d.fillEl) d.fillEl.style.width = `${Math.round(d.charge * 100)}%`;
+      if (d.gaugeEl) {
+        d.gaugeEl.style.left = `${pc.x}px`;
+        d.gaugeEl.style.top = `${pc.top - 30}px`;
+      }
+      d.pTimer += dt;
+      if (d.pTimer > 0.16 && !prefersReduced) {
+        d.pTimer = 0;
+        const s = document.createElement("div");
+        s.className = "gspark";
+        s.style.left = `${pc.x + (Math.random() - 0.5) * 48}px`;
+        s.style.top = `${pc.bottom - 6}px`;
+        layer.appendChild(s);
+        setTimeout(() => s.remove(), 740);
+      }
+      if (d.charge >= 1) heroTransform();
+    }
+  }
+
+  // ---- 4. 서바이벌 웨이브 ----
+  // 적이 몰려오면 펫이 알아서 반격한다. 사용자가 직접 적을 클릭하면 즉시
+  // 터지고 콤보가 쌓여 보너스가 커진다(안 눌러도 지는 일은 없다).
+  const ENEMY_GLYPHS = ["👾", "🦠", "🐛", "👻"];
+  function startSurvival() {
+    game.duration = 13;
+    game.data = { spawnTimer: 0, atkTimer: 0, combo: 0, comboTimer: 0 };
+    petEl.classList.add("pet--battle");
+    setActivityClass("pet--sitting");
+    setExpression("excited");
+    spawnFx("적이 몰려온다!", { impact: true });
+    fxFlash("rgba(255,60,60,0.18)");
+  }
+  function spawnEnemy() {
+    const fromLeft = Math.random() < 0.5;
+    const x = fromLeft ? -34 : window.innerWidth + 12;
+    const el = document.createElement("button");
+    el.type = "button";
+    el.className = "genemy";
+    el.textContent = ENEMY_GLYPHS[Math.floor(Math.random() * ENEMY_GLYPHS.length)];
+    el.style.left = `${x}px`;
+    el.style.top = `${floorTop() + H * 0.3}px`;
+    el.dataset.x = String(x);
+    el.dataset.dir = fromLeft ? "1" : "-1";
+    el.addEventListener("click", (e) => {
+      e.stopPropagation();
+      killEnemy(el, true);
+    });
+    addGameEntity(el);
+  }
+  function killEnemy(el, byUser) {
+    if (el.dataset.dead) return;
+    el.dataset.dead = "1";
+    const b = el.getBoundingClientRect();
+    const cx = b.left + b.width / 2;
+    const cy = b.top + b.height / 2;
+    const d = game.data;
+    fxBurst(cx, cy, byUser ? "#ff6fa5" : "#5cff8f", byUser ? 16 : 10, byUser ? 80 : 54);
+    fxRing(cx, cy, byUser ? "#ff6fa5" : "#5cff8f", 72);
+    let gain = byUser ? 3 : 1;
+    if (byUser) {
+      d.combo++;
+      d.comboTimer = 0;
+      if (d.combo >= 2) {
+        gain += Math.min(4, d.combo - 1);
+        fxScore(cx, cy - 24, `${d.combo} COMBO!`, "pink");
+        fxRing(cx, cy, "#ffffff", 100);
+      }
+    }
+    game.coins += gain;
+    game.score++;
+    fxScore(cx, cy, `+${gain} 🪙`, byUser ? "pink" : "green");
+    el.classList.add("is-pop");
+    setTimeout(() => el.remove(), 240);
+  }
+  function stepSurvival(dt) {
+    const d = game.data;
+    const pc = petCenter();
+    d.spawnTimer -= dt;
+    if (d.spawnTimer <= 0 && liveEntities("genemy").length < 6) {
+      d.spawnTimer = 0.85 + Math.random() * 0.7;
+      spawnEnemy();
+    }
+    d.comboTimer += dt;
+    if (d.comboTimer > 1.6) d.combo = 0;
+
+    // 적은 펫 쪽으로 걸어오다 일정 거리에서 멈춰 위협만 한다(피해는 없다)
+    for (const el of liveEntities("genemy")) {
+      const dir = Number(el.dataset.dir);
+      const x = Number(el.dataset.x);
+      if (Math.abs(x - pc.x) > 46) {
+        const nx = x + dir * 64 * dt;
+        el.dataset.x = String(nx);
+        el.style.left = `${nx}px`;
+      }
+      el.classList.toggle("is-flip", dir < 0);
+    }
+
+    d.atkTimer += dt;
+    if (d.atkTimer > 0.75) {
+      d.atkTimer = 0;
+      let nearest = null;
+      let best = Infinity;
+      for (const el of liveEntities("genemy")) {
+        const dist = Math.abs(Number(el.dataset.x) - pc.x);
+        if (dist < best) {
+          best = dist;
+          nearest = el;
+        }
+      }
+      if (nearest && best < 280) {
+        petEl.classList.toggle("pet--flip", Number(nearest.dataset.x) > pc.x);
+        recoil();
+        fxRing(pc.x, pc.y, "#5cff8f", 56);
+        killEnemy(nearest, false);
+      }
+    }
+  }
+
+  // ---- 게임 공통 진행/종료 ----
+  function startGame(type) {
+    if (gameActive()) endGame({ quiet: true });
+    closeMenu();
+    cancelSideActivities();
+    state.mode = "roam";
+    state.activity = "game";
+    state.activityTimer = 0;
+    state.activityDuration = Infinity; // stepGame이 제한시간을 직접 센다
+    state.baseExpression = "excited";
+    game.type = type;
+    game.timer = 0;
+    game.score = 0;
+    game.coins = 0;
+    game.entities = [];
+    game.data = null;
+    petEl.classList.remove(...GAME_BODY_CLASSES);
+    if (type === "bubble") startBubble();
+    else if (type === "kart") startKart();
+    else if (type === "hero") startHero();
+    else startSurvival();
+  }
+  function stepGame(dt) {
+    game.timer += dt;
+    if (game.type === "bubble") stepBubble(dt);
+    else if (game.type === "kart") stepKart(dt);
+    else if (game.type === "hero") stepHero(dt);
+    else if (game.type === "survival") stepSurvival(dt);
+    game.entities = game.entities.filter((e) => e.isConnected);
+    if (game.timer >= game.duration) endGame();
+  }
+  function endGame({ quiet = false } = {}) {
+    if (!gameActive()) return;
+    const earned = game.coins;
+    clearGameEntities();
+    petEl.classList.remove(...GAME_BODY_CLASSES);
+    game.type = null;
+    game.data = null;
+    if (earned > 0) {
+      gacha.addCoins(earned);
+      const pc = petCenter();
+      fxScore(pc.x, pc.top - 34, `합계 +${earned} 🪙`, "gold");
+      fxRing(pc.x, pc.y, "#ffd23c", 120);
+    }
+    state.y = floorTop();
+    place();
+    if (!quiet && state.mode === "roam") enterActivity(pickActivity());
+  }
+
   function pickActivity() {
     const total = ACTIVITIES.reduce((s, a) => s + a.weight, 0);
     let r = Math.random() * total;
@@ -799,6 +1263,10 @@
     return ACTIVITIES[0];
   }
   function enterActivity(a) {
+    if (a.type === "game") {
+      startGame(GAMES[Math.floor(Math.random() * GAMES.length)].id);
+      return;
+    }
     if (a.type === "climb") {
       const target = findClimbTarget();
       if (!target) {
@@ -1029,21 +1497,47 @@
       state.x = clampX(e.clientX - drag.offX);
       state.y = Math.max(0, Math.min(e.clientY - drag.offY, window.innerHeight - H));
       place();
+      // 카트 모드에서 끌고 다니는 동안엔 더 뜨거운 드리프트 궤적이 그려진다
+      if (game.type === "kart") {
+        const now = performance.now();
+        if (!drag.lastTrail || now - drag.lastTrail > 28) {
+          drag.lastTrail = now;
+          drag.speed = Math.hypot(e.clientX - (drag.lastX ?? e.clientX), e.clientY - (drag.lastY ?? e.clientY));
+          drag.lastX = e.clientX;
+          drag.lastY = e.clientY;
+          spawnKartTrail(true);
+        }
+      }
     }
   });
 
   function endDrag(e) {
     if (!drag) return;
     const wasMoved = drag.moved;
+    const releaseSpeed = drag.speed || 0; // drag를 비우기 전에 챙겨둔다(카트 스핀 세기)
     try { petEl.releasePointerCapture(e.pointerId); } catch (_) {}
     drag = null;
     petEl.classList.remove("pet--dragging");
 
     if (!wasMoved) {
+      // 히어로 변신 중엔 클릭이 곧 "연타 충전"이라 메뉴를 열지 않는다
+      if (game.type === "hero") {
+        heroTap();
+        return;
+      }
       // 순수 클릭 → 곧장 설문으로 끌고 가지 않고, 먼저 펫 메뉴로 "뭐 만들지
       // 물어볼지 / 그냥 인사만 할지"부터 고르게 한다(드래그였다면 여기로
       // 오지 않으므로 클릭-메뉴 오작동 방지).
       toggleMenu();
+      return;
+    }
+    // 게임 중에는 떨어뜨려 놀라게 하지 않고 그대로 이어서 진행한다.
+    // 카트라면 놓는 순간의 속도만큼 화려한 스핀이 터진다.
+    if (gameActive()) {
+      if (game.type === "kart") kartSpin(Math.min(1, releaseSpeed / 26));
+      state.y = game.type === "kart" ? kartFloor() : floorTop();
+      place();
+      state.mode = "roam";
       return;
     }
     // 드래그로 놓음: 바닥보다 위면 낙하, 바닥이면 그대로 복귀
@@ -1169,6 +1663,10 @@
         // 기본 그림은 꼬리가 오른쪽(뒤)에 있는 "왼쪽을 향한" 자세라서, 오른쪽으로
         // 걸을 때만 좌우 반전해야 꼬리가 이동 방향 뒤쪽에 남아 앞으로 걷는 것처럼 보인다.
         petEl.classList.toggle("pet--flip", state.dx > 0);
+      } else if (state.activity === "game") {
+        // 게임이 어떤 이유로든 정리됐는데 activity만 남아있으면 평소 행동으로 복귀
+        if (gameActive()) stepGame(dt);
+        else enterActivity(pickActivity());
       } else if (state.activity === "climb") {
         stepClimb(dt);
       } else if (state.activity === "nibble") {
@@ -1190,11 +1688,14 @@
   // 복잡하게 다시 계산하지 않고 그냥 바닥으로 되돌린다.
   window.addEventListener("resize", () => {
     state.x = clampX(state.x);
+    // 게임 요소들은 뷰포트 좌표로 배치돼 있어서 창 크기가 바뀌면 정리한다
+    // (스크롤은 fixed 레이어라 영향이 없으므로 게임을 끊지 않는다)
+    endGame({ quiet: true });
     cancelSideActivities();
     if (state.mode !== "falling" && state.mode !== "dragging") state.y = floorTop();
     place();
     if (dialogEl && dialogEl.classList.contains("dialog--open")) positionDialog();
-    if (menuEl && menuEl.classList.contains("pet-menu--open")) positionMenu();
+    if (menuOpen) positionMenu();
   });
   // 스크롤 자체를 "어어!" 하고 휘청하는 반응으로 살려둔다 — 밟고 있던 요소가
   // 있었다면 좌표가 무효화되니 정리하되, 밋밋하게 뚝 떨어뜨리지 않는다.
@@ -1224,6 +1725,7 @@
   // 클릭의 "디폴트 결과"가 아니라 펫이 가끔 제안하는 선택지처럼 느껴지게 한다.
   let menuEl = null;
   let menuAutoCloseTimer = null;
+  let menuOpen = false; // 여는 클래스는 다음 프레임에 붙으므로, 의도는 이 플래그로 따로 들고 있는다
   const MENU_GREETINGS = [
     "안녕! 오늘도 반가워 >_<",
     "그냥 놀러 왔구나, 좋아!",
@@ -1231,17 +1733,49 @@
     "네가 옆에 있으니 든든해",
   ];
 
+  function renderMenuRoot() {
+    menuEl.innerHTML = `
+      <button type="button" class="pet-menu__btn pet-menu__btn--primary" data-action="wizard">💬 뭐 만들지 물어보기</button>
+      <button type="button" class="pet-menu__btn pet-menu__btn--play" data-action="play">🎮 같이 놀기</button>
+      <button type="button" class="pet-menu__btn" data-action="greet">👋 인사만 할래</button>`;
+  }
+
+  // 미니게임은 랜덤으로도 뜨지만, 하고 싶을 때 바로 고를 수 있어야 해서
+  // 메뉴 안에 게임 목록을 따로 둔다.
+  function renderMenuPlay() {
+    const items = GAMES.map(
+      (g) =>
+        `<button type="button" class="pet-menu__btn pet-menu__btn--game" data-game="${g.id}">${g.label}<small>${g.desc}</small></button>`
+    ).join("");
+    menuEl.innerHTML = `<div class="pet-menu__title">뭐 하고 놀까?</div>${items}<button type="button" class="pet-menu__btn pet-menu__btn--back" data-action="back">← 뒤로</button>`;
+  }
+
   function buildMenu() {
     menuEl = document.createElement("div");
     menuEl.className = "pet-menu";
-    menuEl.innerHTML = `
-      <button type="button" class="pet-menu__btn pet-menu__btn--primary" data-action="wizard">💬 뭐 만들지 물어보기</button>
-      <button type="button" class="pet-menu__btn" data-action="greet">👋 인사만 할래</button>`;
+    renderMenuRoot();
     menuEl.addEventListener("click", (e) => {
       const btn = e.target.closest("button");
       if (!btn) return;
+      if (btn.dataset.game) {
+        startGame(btn.dataset.game); // startGame이 메뉴를 닫는다
+        return;
+      }
+      const action = btn.dataset.action;
+      if (action === "play") {
+        renderMenuPlay();
+        positionMenu();
+        bumpMenuAutoClose();
+        return;
+      }
+      if (action === "back") {
+        renderMenuRoot();
+        positionMenu();
+        bumpMenuAutoClose();
+        return;
+      }
       closeMenu();
-      if (btn.dataset.action === "wizard") {
+      if (action === "wizard") {
         openDialog();
       } else {
         react(MENU_GREETINGS[Math.floor(Math.random() * MENU_GREETINGS.length)], "love");
@@ -1260,26 +1794,37 @@
     menuEl.style.bottom = `${window.innerHeight - state.y + 10}px`;
   }
 
-  function openMenu() {
-    if (!menuEl) buildMenu();
-    positionMenu();
-    requestAnimationFrame(() => menuEl.classList.add("pet-menu--open"));
+  function bumpMenuAutoClose() {
     clearTimeout(menuAutoCloseTimer);
     menuAutoCloseTimer = setTimeout(closeMenu, 6000);
   }
 
+  function openMenu() {
+    if (!menuEl) buildMenu();
+    else renderMenuRoot(); // 지난번에 게임 목록에서 닫혔더라도 항상 첫 화면부터
+    positionMenu();
+    menuOpen = true;
+    // 같은 틱에 열고 바로 닫는 경우(예: 메뉴에서 곧장 게임 시작) 다음 프레임의
+    // 이 콜백이 닫힌 메뉴를 되살리지 않도록 의도를 다시 확인한다.
+    requestAnimationFrame(() => {
+      if (menuOpen) menuEl.classList.add("pet-menu--open");
+    });
+    bumpMenuAutoClose();
+  }
+
   function closeMenu() {
+    menuOpen = false;
     clearTimeout(menuAutoCloseTimer);
     if (menuEl) menuEl.classList.remove("pet-menu--open");
   }
 
   function toggleMenu() {
-    if (menuEl && menuEl.classList.contains("pet-menu--open")) closeMenu();
+    if (menuOpen) closeMenu();
     else openMenu();
   }
 
   window.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && menuEl && menuEl.classList.contains("pet-menu--open")) closeMenu();
+    if (e.key === "Escape" && menuOpen) closeMenu();
   });
 
   // ---- 대화창(위저드) ----
@@ -1289,6 +1834,7 @@
   function openDialog() {
     closeMenu();
     state.mode = "dialog";
+    endGame({ quiet: true });
     cancelSideActivities();
     place();
     setActivityClass("pet--sitting");

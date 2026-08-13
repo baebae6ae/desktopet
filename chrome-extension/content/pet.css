@@ -524,6 +524,305 @@
   transform: translateX(-50%) translateY(0);
 }
 
+/* ================================================================
+   미니게임 4종: 장비 · 이펙트
+   소리는 재생하지 않고(프로젝트 규칙) 빛/파티클/텍스트로만 표현한다.
+   ================================================================ */
+
+/* ---- 펫이 장착하는 것들(몸통 애니메이션과 안 싸우도록 별도 자식 요소) ---- */
+.pet__gun,
+.pet__kart,
+.pet__aura {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease;
+}
+
+.pet__gun {
+  right: -30%;
+  top: 44%;
+  width: 36%;
+  height: 15%;
+  background: linear-gradient(180deg, #8b9bc9, #55618a);
+  border: 2px solid #2b2b2b;
+  border-radius: 3px;
+}
+.pet__gun::after {
+  content: "";
+  position: absolute;
+  right: -22%;
+  top: 12%;
+  width: 26%;
+  height: 76%;
+  background: #cfe9ff;
+  border: 2px solid #2b2b2b;
+  border-radius: 50%;
+}
+.pet--armed .pet__gun { opacity: 1; }
+@keyframes g-recoil {
+  0% { translate: 0 0; }
+  35% { translate: 26% 0; }
+  100% { translate: 0 0; }
+}
+.pet--recoil .pet__gun { animation: g-recoil 0.2s ease-out; }
+
+.pet__kart {
+  left: -18%;
+  bottom: -12%;
+  width: 136%;
+  height: 44%;
+  background: linear-gradient(180deg, #ff7a4a 40%, #d13c22);
+  border: 2px solid #2b2b2b;
+  border-radius: 8px 16px 5px 5px;
+  z-index: -1;
+}
+.pet__kart::before,
+.pet__kart::after {
+  content: "";
+  position: absolute;
+  bottom: -26%;
+  width: 30%;
+  height: 62%;
+  background: #23262c;
+  border: 2px solid #2b2b2b;
+  border-radius: 50%;
+}
+.pet__kart::before { left: 6%; }
+.pet__kart::after { right: 6%; }
+.pet--kart .pet__kart { opacity: 1; }
+
+.pet__aura {
+  inset: -34%;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 210, 60, 0.6), rgba(255, 210, 60, 0.14) 52%, transparent 70%);
+}
+@keyframes g-aura-pulse {
+  0%, 100% { scale: 0.92; opacity: 0.75; }
+  50% { scale: 1.12; opacity: 1; }
+}
+.pet--charging .pet__aura { opacity: 1; animation: g-aura-pulse 0.5s ease-in-out infinite; }
+.pet--hero .pet__aura {
+  opacity: 1;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.8), rgba(255, 210, 60, 0.45) 45%, transparent 72%);
+  animation: g-aura-pulse 0.85s ease-in-out infinite;
+}
+.pet--hero .pet__sprite {
+  filter: drop-shadow(0 0 5px #ffd23c) drop-shadow(0 0 14px rgba(255, 210, 60, 0.75));
+}
+.pet--battle .pet__sprite {
+  filter: drop-shadow(0 0 4px rgba(92, 255, 143, 0.85));
+}
+
+/* ---- 공용 이펙트 ---- */
+.gfx {
+  position: fixed;
+  pointer-events: none;
+  z-index: 6;
+}
+
+.gfx-burst { width: 0; height: 0; }
+.gfx-burst span {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 7px;
+  height: 7px;
+  margin: -3.5px 0 0 -3.5px;
+  border-radius: 50%;
+  animation: g-burst-fly 0.72s ease-out forwards;
+  animation-delay: var(--d, 0s);
+}
+@keyframes g-burst-fly {
+  0% { translate: 0 0; scale: 1.15; opacity: 1; }
+  100% { translate: var(--tx) var(--ty); scale: 0.15; opacity: 0; }
+}
+
+.gfx-ring {
+  width: 0;
+  height: 0;
+  border: 3px solid #fff;
+  border-radius: 50%;
+  animation: g-ring-grow 0.6s ease-out forwards;
+}
+@keyframes g-ring-grow {
+  0% { width: 0; height: 0; margin: 0; opacity: 0.95; border-width: 4px; }
+  100% {
+    width: var(--ring, 90px);
+    height: var(--ring, 90px);
+    margin: calc(var(--ring, 90px) / -2) 0 0 calc(var(--ring, 90px) / -2);
+    opacity: 0;
+    border-width: 1px;
+  }
+}
+
+.gfx-flash {
+  inset: 0;
+  animation: g-flash-fade 0.4s ease-out forwards;
+}
+@keyframes g-flash-fade {
+  0% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+.gfx-score {
+  font-weight: 900;
+  font-size: 15px;
+  color: #fff;
+  text-shadow: 0 2px 0 #12151b, 0 0 10px currentColor;
+  translate: -50% 0;
+  white-space: nowrap;
+  animation: g-score-rise 0.95s ease-out forwards;
+}
+@keyframes g-score-rise {
+  0% { translate: -50% 6px; scale: 0.7; opacity: 0; }
+  22% { translate: -50% -6px; scale: 1.18; opacity: 1; }
+  100% { translate: -50% -40px; scale: 1; opacity: 0; }
+}
+.gfx-score--cyan { color: #8fe9ff; }
+.gfx-score--gold { color: #ffd23c; }
+.gfx-score--amber { color: #ffb03c; }
+.gfx-score--pink { color: #ff6fa5; }
+.gfx-score--green { color: #5cff8f; }
+
+/* ---- 1. 버블건 ---- */
+.gtarget {
+  position: fixed;
+  z-index: 6;
+  pointer-events: auto;
+  border: none;
+  background: transparent;
+  font-size: 30px;
+  line-height: 1;
+  padding: 6px;
+  cursor: pointer;
+  filter: drop-shadow(0 0 8px rgba(143, 233, 255, 0.9));
+  animation: g-target-float var(--float, 2.4s) ease-in-out infinite;
+}
+@keyframes g-target-float {
+  0%, 100% { translate: 0 0; rotate: -6deg; }
+  50% { translate: 0 -12px; rotate: 6deg; }
+}
+.gtarget:hover { scale: 1.18; }
+.gtarget.is-pop { animation: g-target-pop 0.25s ease-out forwards; }
+@keyframes g-target-pop {
+  0% { scale: 1.25; opacity: 1; }
+  100% { scale: 0.2; opacity: 0; }
+}
+
+.gbullet {
+  position: fixed;
+  z-index: 6;
+  pointer-events: none;
+  width: 13px;
+  height: 13px;
+  margin: -6.5px 0 0 -6.5px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #ffffff, #8fe9ff 60%, #37d0ff);
+  box-shadow: 0 0 12px #8fe9ff, 0 0 22px rgba(55, 208, 255, 0.7);
+  animation: g-bullet-fly 0.24s linear forwards;
+}
+@keyframes g-bullet-fly {
+  0% { translate: 0 0; scale: 0.7; }
+  100% { translate: var(--dx) var(--dy); scale: 1.1; }
+}
+
+/* ---- 2. 카트 드리프트 ---- */
+.gtrail {
+  position: fixed;
+  z-index: 4;
+  pointer-events: none;
+  width: 16px;
+  height: 7px;
+  margin: -3.5px 0 0 -8px;
+  border-radius: 4px;
+  background: rgba(120, 120, 130, 0.55);
+  animation: g-trail-fade 0.6s ease-out forwards;
+}
+.gtrail--hot {
+  width: 26px;
+  height: 10px;
+  margin: -5px 0 0 -13px;
+  background: linear-gradient(90deg, #ffd23c, #ff5b3c);
+  box-shadow: 0 0 14px rgba(255, 122, 60, 0.95);
+}
+@keyframes g-trail-fade {
+  0% { opacity: 0.95; scale: 1; }
+  100% { opacity: 0; scale: 0.4; }
+}
+
+/* ---- 3. 히어로 변신 게이지 ---- */
+.ggauge {
+  position: fixed;
+  z-index: 6;
+  pointer-events: none;
+  translate: -50% 0;
+  width: 108px;
+  height: 14px;
+  background: #12151b;
+  border: 2px solid #2b2b2b;
+  border-radius: 999px;
+  overflow: hidden;
+  box-shadow: 0 0 12px rgba(255, 210, 60, 0.6);
+}
+.ggauge__fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #ffb03c, #ffd23c, #fff6c4);
+  transition: width 0.12s ease-out;
+}
+.ggauge__label {
+  position: absolute;
+  inset: 0;
+  font-size: 9px;
+  font-weight: 900;
+  color: #fff;
+  text-shadow: 0 1px 2px #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  letter-spacing: 0.08em;
+}
+
+.gspark {
+  position: fixed;
+  z-index: 5;
+  pointer-events: none;
+  width: 6px;
+  height: 6px;
+  margin: -3px 0 0 -3px;
+  border-radius: 50%;
+  background: #ffd23c;
+  box-shadow: 0 0 10px #ffd23c;
+  animation: g-spark-rise 0.72s ease-out forwards;
+}
+@keyframes g-spark-rise {
+  0% { translate: 0 0; opacity: 1; scale: 1; }
+  100% { translate: 0 -54px; opacity: 0; scale: 0.3; }
+}
+
+/* ---- 4. 서바이벌 ---- */
+.genemy {
+  position: fixed;
+  z-index: 6;
+  pointer-events: auto;
+  border: none;
+  background: transparent;
+  font-size: 26px;
+  line-height: 1;
+  padding: 5px;
+  cursor: pointer;
+  filter: drop-shadow(0 0 6px rgba(255, 111, 165, 0.85));
+  animation: g-enemy-bob 0.42s ease-in-out infinite;
+}
+@keyframes g-enemy-bob {
+  0%, 100% { translate: 0 0; }
+  50% { translate: 0 -5px; }
+}
+.genemy.is-flip { scale: -1 1; }
+.genemy:hover { filter: drop-shadow(0 0 12px #fff); }
+.genemy.is-pop { animation: g-target-pop 0.24s ease-out forwards; }
+
 /* ---------------- 펫 메뉴(클릭 시 위저드 대신 먼저 뜨는 가벼운 선택지) ---------------- */
 .pet-menu {
   position: fixed;
@@ -564,6 +863,33 @@
   background: linear-gradient(135deg, #5cff8f, #37d0ff);
   color: #08131a;
   border-color: transparent;
+}
+.pet-menu__btn--play {
+  background: linear-gradient(135deg, #ff9f43, #ff5b8a);
+  color: #1a0910;
+  border-color: transparent;
+}
+.pet-menu__title {
+  font-size: 11px;
+  font-weight: 800;
+  color: #9aa4b5;
+  padding: 2px 2px 4px;
+  letter-spacing: 0.03em;
+}
+.pet-menu__btn--game small {
+  display: block;
+  font-weight: 600;
+  font-size: 10px;
+  color: #9aa4b5;
+  margin-top: 2px;
+}
+.pet-menu__btn--game:hover {
+  border-color: #ff9f43;
+}
+.pet-menu__btn--back {
+  color: #9aa4b5;
+  font-weight: 600;
+  text-align: center;
 }
 
 /* ---------------- 대화창(위저드) ---------------- */
@@ -883,6 +1209,11 @@
   .pet__zzz,
   .pet__shadow,
   .pet__tint,
+  .pet__gun,
+  .pet__kart,
+  .pet__aura,
+  .gtarget,
+  .genemy,
   .dialog,
   .pet-menu { animation: none !important; transition: none !important; }
 }
