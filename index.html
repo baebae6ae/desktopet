@@ -11,6 +11,20 @@
   <!-- 캐릭터가 돌아다니는 무대. 브라우저 창(뷰포트) 전체를 덮는다. -->
   <main id="stage" class="stage" aria-label="데스크토펫 놀이터">
     <p class="stage__hint" aria-hidden="true">펫을 클릭해 보세요 &gt;_</p>
+
+    <!-- 미니 놀이터: 확장프로그램에서는 실제 웹페이지의 버튼·이미지·영상 등을
+         밟고 올라타지만, 이 페이지는 펫의 "집"이라 그런 구조물이 없다. 그래서
+         climb/냠냠/영상관람/타이핑 미니게임이 상호작용할 장식용 구조물을 몇 개
+         놓아둔다(실제 링크·기능은 없음, 순수 장식). -->
+    <div class="playground" aria-hidden="true">
+      <nav class="pg__shelf pg__shelf--1"></nav>
+      <nav class="pg__shelf pg__shelf--2"></nav>
+      <img class="pg__pic pg__pic--1" alt="" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMjAiIGhlaWdodD0iOTAiIHZpZXdCb3g9IjAgMCAxMjAgOTAiPjxyZWN0IHdpZHRoPSIxMjAiIGhlaWdodD0iOTAiIGZpbGw9IiMzN2QwZmYiLz48Y2lyY2xlIGN4PSIzMCIgY3k9IjMwIiByPSIxNCIgZmlsbD0iI2ZmZDIzYyIvPjxwYXRoIGQ9Ik0wIDcwIEwzNSA0MCBMNjUgNjUgTDkwIDQ1IEwxMjAgNzUgTDEyMCA5MCBMMCA5MFoiIGZpbGw9IiM1Y2ZmOGYiLz48L3N2Zz4=" />
+      <img class="pg__pic pg__pic--2" alt="" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMjAiIGhlaWdodD0iOTAiIHZpZXdCb3g9IjAgMCAxMjAgOTAiPjxyZWN0IHdpZHRoPSIxMjAiIGhlaWdodD0iOTAiIGZpbGw9IiNmZjZmYTUiLz48cmVjdCB4PSIxNSIgeT0iMTUiIHdpZHRoPSIzMCIgaGVpZ2h0PSIzMCIgZmlsbD0iI2ZmZDIzYyIvPjxyZWN0IHg9IjU1IiB5PSI0NSIgd2lkdGg9IjUwIiBoZWlnaHQ9IjMwIiBmaWxsPSIjMzdkMGZmIi8+PC9zdmc+" />
+      <p class="pg__note">오늘도 좋은 하루 보내요!</p>
+      <video class="pg__tv" muted loop autoplay playsinline></video>
+      <input class="pg__pad" type="text" tabindex="-1" placeholder="메모장" />
+    </div>
   </main>
 
   <div id="live-region" class="sr-only" role="status" aria-live="polite"></div>

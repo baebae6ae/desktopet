@@ -6,7 +6,9 @@
  * pet.css / popup.css를 그대로 재사용한다(중복 구현 X). web-shim.js가 먼저 로드되어
  * chrome.storage.local을 localStorage로 흉내내주므로, 저장 관련 코드는 확장판과 동일하게 짠다.
  * 확장판과 다른 점은 "사이트별 켜기/끄기"가 없다는 것뿐 — 이 페이지 자체가 펫의 집이라
- * 항상 보여준다.
+ * 항상 보여준다. climb/미니게임 4종도 확장판 pet.js와 동일 로직을 그대로 옮겨왔고,
+ * 다른 웹사이트의 버튼·이미지·영상 대신 index.html의 놀이터 구조물(.playground)을
+ * 상호작용 대상으로 쓴다.
  */
 (async () => {
   const SITE = "https://nocalhostmore.vercel.app";
@@ -147,6 +149,23 @@
   zzzEl.textContent = "Zzz";
   bodyEl.appendChild(zzzEl);
 
+  // 이미지 위에 올라갔을 때 그 이미지의 대표색을 잠깐 덧입히는 "카멜레온" 연출용
+  const tintEl = document.createElement("div");
+  tintEl.className = "pet__tint";
+  bodyEl.appendChild(tintEl);
+
+  // 미니게임용 장비/오라. 몸통(.pet__body) 애니메이션과 싸우지 않도록 각각
+  // 독립된 자식 요소로 두고, 게임 클래스(pet--armed 등)로 보이기만 토글한다.
+  const gunEl = document.createElement("div");
+  gunEl.className = "pet__gun";
+  bodyEl.appendChild(gunEl);
+  const kartEl = document.createElement("div");
+  kartEl.className = "pet__kart";
+  bodyEl.appendChild(kartEl);
+  const auraEl = document.createElement("div");
+  auraEl.className = "pet__aura";
+  bodyEl.appendChild(auraEl);
+
   const GEAR_LIMB_KEYS = { arm: ["armLeft", "armRight"], legs: ["legLeft", "legRight"] };
   function renderLimbGear(equipped) {
     for (const el of Object.values(limbEls)) {
@@ -228,6 +247,11 @@
     baseExpression: "happy",
     reactTimer: null,
     fallFxTimer: null,
+    climb: null, // 구조물 위에 올라타 있는 동안의 진행 상태(stepClimb 참고)
+    nibble: null, // 짧은 텍스트를 냠냠 깨무는 동안의 진행 상태(stepNibble 참고)
+    watch: null, // 영상 앞에 앉아 구경하는 동안의 진행 상태(stepWatch 참고)
+    typing: null, // 빈 입력창 앞에서 타이핑 흉내를 내는 동안의 진행 상태(stepTyping 참고)
+    lastScrollY: window.scrollY,
   };
 
   function floorTop() {
@@ -255,6 +279,11 @@
     { type: "dance", cls: "pet--dancing", weight: 1.2, min: 2, max: 3.5, expr: "excited" },
     { type: "stretch", cls: "pet--stretching", weight: 1.2, min: 2, max: 3, expr: "happy" },
     { type: "wave", cls: "pet--waving", weight: 1.4, min: 1.5, max: 2.5, expr: "love" },
+    { type: "climb", cls: "pet--walking", weight: 1.6, min: 0, max: 0, expr: "excited" },
+    { type: "nibble", cls: "pet--walking", weight: 1.3, min: 0, max: 0, expr: "excited" },
+    { type: "watch", cls: "pet--walking", weight: 1.0, min: 0, max: 0, expr: "happy" },
+    { type: "type", cls: "pet--walking", weight: 1.0, min: 0, max: 0, expr: "excited" },
+    { type: "game", cls: "pet--walking", weight: 1.4, min: 0, max: 0, expr: "excited" },
     { type: "wiggle", cls: "pet--wiggling", weight: 1.2, min: 1.2, max: 2.2, expr: "excited" },
     { type: "tilt", cls: "pet--tilting", weight: 1.1, min: 1.6, max: 1.6, expr: "surprised" },
     { type: "sneeze", cls: "pet--sneezing", weight: 0.8, min: 0.9, max: 0.9, expr: "surprised" },
@@ -262,6 +291,896 @@
     { type: "bow", cls: "pet--bowing", weight: 0.9, min: 1.4, max: 1.4, expr: "love" },
     { type: "look", cls: "pet--looking", weight: 1.2, min: 2, max: 3, expr: "happy" },
   ];
+
+  // ---- 구조물 위에 잠깐 올라타기(확장판 pet.js와 동일 로직) ----
+  // 이 페이지 자체가 펫의 집이라 스크롤/다른 사이트는 없지만, 화면에 놓인
+  // 놀이터 구조물(nav 선반/이미지/문단/영상/입력창)을 대상으로 그대로 동작한다.
+  const CLIMB = {
+    selector: 'button, a, header, nav, footer, h1, h2, h3, hr, img, section, article, [role="button"], .btn',
+    minWidth: 64,
+    minLiftY: 20,
+    maxLiftY: 260,
+    maxReachX: 380,
+    maxScan: 500,
+    walkSpeed: 30,
+    hopSpeed: 520,
+    standMin: 2,
+    standMax: 4,
+  };
+
+  function findClimbTarget(opts = {}) {
+    const exclude = opts.exclude;
+    const floor = floorTop();
+    const petCenterX = state.x + W / 2;
+    const candidates = document.querySelectorAll(CLIMB.selector);
+    let best = null;
+    let bestDist = Infinity;
+    let scanned = 0;
+    for (const el of candidates) {
+      if (scanned++ > CLIMB.maxScan) break;
+      if (exclude && exclude.has(el)) continue;
+      const r = el.getBoundingClientRect();
+      if (r.width < CLIMB.minWidth || r.height < 6) continue;
+      if (r.top < 0 || r.bottom > window.innerHeight || r.left < 0 || r.right > window.innerWidth) continue;
+      const liftY = floor - r.top;
+      if (liftY < CLIMB.minLiftY || liftY > CLIMB.maxLiftY) continue;
+      const cx = r.left + r.width / 2;
+      const dist = Math.abs(cx - petCenterX);
+      if (dist > CLIMB.maxReachX || dist >= bestDist) continue;
+      const probeX = Math.min(Math.max(cx, 0), window.innerWidth - 1);
+      const topEl = document.elementFromPoint(probeX, r.top + 2);
+      if (!topEl || !(topEl === el || el.contains(topEl))) continue;
+      best = { el, rect: r };
+      bestDist = dist;
+    }
+    return best;
+  }
+
+  function sampleDominantColor(imgEl) {
+    try {
+      const c = document.createElement("canvas");
+      c.width = 8;
+      c.height = 8;
+      const ctx = c.getContext("2d");
+      ctx.drawImage(imgEl, 0, 0, 8, 8);
+      const data = ctx.getImageData(0, 0, 8, 8).data;
+      let r = 0, g = 0, b = 0, n = 0;
+      for (let i = 0; i < data.length; i += 4) {
+        if (data[i + 3] < 10) continue;
+        r += data[i];
+        g += data[i + 1];
+        b += data[i + 2];
+        n++;
+      }
+      if (!n) return null;
+      return `rgb(${Math.round(r / n)}, ${Math.round(g / n)}, ${Math.round(b / n)})`;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function findTextTarget() {
+    const petCenterX = state.x + W / 2;
+    const candidates = document.querySelectorAll("p, li, a, span, strong, em, b, h1, h2, h3, h4");
+    let best = null;
+    let bestDist = Infinity;
+    let scanned = 0;
+    for (const el of candidates) {
+      if (scanned++ > CLIMB.maxScan) break;
+      if (el.children.length > 0) continue;
+      const text = el.textContent && el.textContent.trim();
+      if (!text || text.length < 2 || text.length > 40) continue;
+      const r = el.getBoundingClientRect();
+      if (r.width < 20 || r.height < 10) continue;
+      if (r.top < 0 || r.bottom > window.innerHeight || r.left < 0 || r.right > window.innerWidth) continue;
+      const cx = r.left + r.width / 2;
+      const dist = Math.abs(cx - petCenterX);
+      if (dist > CLIMB.maxReachX || dist >= bestDist) continue;
+      best = { el, rect: r };
+      bestDist = dist;
+    }
+    return best;
+  }
+
+  function findVideoTarget() {
+    const petCenterX = state.x + W / 2;
+    const candidates = document.querySelectorAll("video");
+    let best = null;
+    let bestDist = Infinity;
+    for (const el of candidates) {
+      const r = el.getBoundingClientRect();
+      if (r.width < 120 || r.height < 80) continue;
+      if (r.bottom < 0 || r.top > window.innerHeight || r.right < 0 || r.left > window.innerWidth) continue;
+      const cx = Math.min(Math.max(r.left + r.width / 2, 0), window.innerWidth);
+      const dist = Math.abs(cx - petCenterX);
+      if (dist > CLIMB.maxReachX * 1.5 || dist >= bestDist) continue;
+      best = { el, rect: r };
+      bestDist = dist;
+    }
+    return best;
+  }
+
+  function findEmptyInputTarget() {
+    const petCenterX = state.x + W / 2;
+    const candidates = document.querySelectorAll(
+      'input[type="text"], input[type="search"], input:not([type]), textarea'
+    );
+    let best = null;
+    let bestDist = Infinity;
+    for (const el of candidates) {
+      if (el.value || el.disabled || el.readOnly) continue;
+      const r = el.getBoundingClientRect();
+      if (r.width < 60 || r.height < 16) continue;
+      if (r.top < 0 || r.bottom > window.innerHeight || r.left < 0 || r.right > window.innerWidth) continue;
+      const cx = r.left + r.width / 2;
+      const dist = Math.abs(cx - petCenterX);
+      if (dist > CLIMB.maxReachX || dist >= bestDist) continue;
+      best = { el, rect: r };
+      bestDist = dist;
+    }
+    return best;
+  }
+
+  function cancelClimb() {
+    if (!state.climb) return;
+    if (state.climb.tinted) tintEl.classList.remove("is-active");
+    state.climb = null;
+    state.y = floorTop();
+  }
+
+  function cancelSideActivities() {
+    cancelClimb();
+    if (state.typing) petEl.classList.remove("pet--talking");
+    state.nibble = null;
+    state.watch = null;
+    state.typing = null;
+  }
+
+  function bouncePlatform(el, strength) {
+    try {
+      el.animate(
+        [
+          { transform: "translateY(0)" },
+          { transform: `translateY(${strength}px)` },
+          { transform: "translateY(0)" },
+        ],
+        { duration: 220, easing: "ease-out", composite: "add" }
+      );
+    } catch (_) {}
+  }
+
+  const TOP_ACTIONS = ["pace", "pace", "stomp", "peek", "nap"];
+
+  function stepClimb(dt) {
+    const c = state.climb;
+    if (!c) return;
+    const { left: platformLeft, right: platformRight, top: platformTop } = c.rect;
+    const platformY = Math.max(0, platformTop - H);
+    const midX = clampX((platformLeft + platformRight) / 2 - W / 2);
+
+    if (c.phase === "approach") {
+      const dir = midX >= state.x ? 1 : -1;
+      petEl.classList.toggle("pet--flip", dir > 0);
+      let nx = state.x + dir * CLIMB.walkSpeed * dt;
+      if ((dir > 0 && nx >= midX) || (dir < 0 && nx <= midX)) {
+        nx = midX;
+        c.phase = "rise";
+        setActivityClass("pet--jumping");
+        spawnFx("폴짝!");
+      }
+      state.x = nx;
+      state.y = floorTop();
+      place();
+      return;
+    }
+
+    if (c.phase === "rise") {
+      state.y -= CLIMB.hopSpeed * dt;
+      if (state.y <= platformY) {
+        state.y = platformY;
+        c.phase = "onTop";
+        c.standTimer = 0;
+        bouncePlatform(c.el, 3);
+
+        if (c.el.tagName === "IMG") {
+          const color = sampleDominantColor(c.el);
+          if (color) {
+            tintEl.style.backgroundColor = color;
+            tintEl.classList.add("is-active");
+            c.tinted = true;
+          }
+        }
+
+        const isTightrope = platformRight - platformLeft > 220 && c.rect.height < 40;
+        c.topAction =
+          isTightrope && Math.random() < 0.7
+            ? "balance"
+            : TOP_ACTIONS[Math.floor(Math.random() * TOP_ACTIONS.length)];
+
+        if (c.topAction === "stomp") {
+          c.standDuration = 1.9;
+          c.stompTimer = 0;
+          setActivityClass("pet--hopping");
+          setExpression("excited");
+          spawnFx("쿵쿵!");
+        } else if (c.topAction === "peek") {
+          c.standDuration = Infinity;
+          c.peekSide = Math.random() < 0.5 ? -1 : 1;
+          c.peeking = false;
+          setActivityClass("pet--walking");
+        } else if (c.topAction === "nap") {
+          c.standDuration = 3 + Math.random() * 1.5;
+          setActivityClass("pet--sleeping");
+          setExpression("sleepy");
+        } else if (c.topAction === "balance") {
+          c.standDuration = 2.4 + Math.random() * 1.3;
+          c.dir = Math.random() < 0.5 ? -1 : 1;
+          setActivityClass("pet--balancing");
+          setExpression("surprised");
+          spawnFx("휘청!");
+        } else {
+          c.standDuration = CLIMB.standMin + Math.random() * (CLIMB.standMax - CLIMB.standMin);
+          c.dir = Math.random() < 0.5 ? -1 : 1;
+          setActivityClass("pet--walking");
+        }
+      }
+      place();
+      return;
+    }
+
+    if (c.phase === "onTop") {
+      c.standTimer += dt;
+      const leftBound = clampX(platformLeft);
+      const rightBound = clampX(Math.max(platformLeft, platformRight - W));
+
+      if (c.topAction === "stomp") {
+        c.stompTimer += dt;
+        if (c.stompTimer >= 0.45) {
+          c.stompTimer -= 0.45;
+          bouncePlatform(c.el, 3);
+          if (Math.random() < 0.5) spawnFx("쿵!");
+        }
+        state.y = platformY;
+        place();
+      } else if (c.topAction === "peek") {
+        if (!c.peeking) {
+          const targetX = c.peekSide < 0 ? leftBound : rightBound;
+          const dir = targetX >= state.x ? 1 : -1;
+          petEl.classList.toggle("pet--flip", dir > 0);
+          let nx = state.x + dir * CLIMB.walkSpeed * dt;
+          if ((dir > 0 && nx >= targetX) || (dir < 0 && nx <= targetX)) {
+            nx = targetX;
+            c.peeking = true;
+            c.standTimer = 0;
+            c.standDuration = 1.8;
+            setActivityClass("pet--tilting");
+            setExpression("surprised");
+            spawnFx("!");
+          }
+          state.x = nx;
+        }
+        state.y = platformY;
+        place();
+      } else if (c.topAction === "nap") {
+        state.y = platformY;
+        place();
+      } else if (c.topAction === "balance") {
+        let nx = state.x + c.dir * CLIMB.walkSpeed * 0.45 * dt;
+        if (nx <= leftBound) {
+          nx = leftBound;
+          c.dir = 1;
+        } else if (nx >= rightBound) {
+          nx = rightBound;
+          c.dir = -1;
+        }
+        petEl.classList.toggle("pet--flip", c.dir > 0);
+        state.x = nx;
+        state.y = platformY;
+        place();
+      } else {
+        let nx = state.x + c.dir * CLIMB.walkSpeed * 0.8 * dt;
+        if (nx <= leftBound) {
+          nx = leftBound;
+          c.dir = 1;
+        } else if (nx >= rightBound) {
+          nx = rightBound;
+          c.dir = -1;
+        }
+        petEl.classList.toggle("pet--flip", c.dir > 0);
+        state.x = nx;
+        state.y = platformY;
+        place();
+      }
+
+      if (c.standTimer >= c.standDuration) {
+        if (c.tinted) {
+          tintEl.classList.remove("is-active");
+          c.tinted = false;
+        }
+        const hopsSoFar = c.hopsSoFar || 0;
+        const next = hopsSoFar < 2 && Math.random() < 0.45 ? findClimbTarget({ exclude: c.visited }) : null;
+        if (next) {
+          const leavingEl = c.el;
+          c.visited = c.visited || new Set();
+          c.visited.add(c.el);
+          c.el = next.el;
+          c.rect = next.rect;
+          c.hopsSoFar = hopsSoFar + 1;
+          c.phase = "approach";
+          setActivityClass("pet--jumping");
+          setExpression("excited");
+          bouncePlatform(leavingEl, 2);
+          spawnFx("폴짝폴짝!");
+        } else {
+          c.phase = "descend";
+          setActivityClass("pet--jumping");
+          setExpression("happy");
+          bouncePlatform(c.el, 2);
+        }
+      }
+      return;
+    }
+
+    if (c.phase === "descend") {
+      state.y += CLIMB.hopSpeed * dt;
+      const floor = floorTop();
+      if (state.y >= floor) {
+        state.y = floor;
+        state.climb = null;
+        place();
+        enterActivity(pickActivity());
+        return;
+      }
+      place();
+    }
+  }
+
+  function stepNibble(dt) {
+    const n = state.nibble;
+    if (!n) return;
+    const targetX = clampX(n.rect.left + n.rect.width / 2 - W / 2);
+    if (n.phase === "approach") {
+      const dir = targetX >= state.x ? 1 : -1;
+      petEl.classList.toggle("pet--flip", dir > 0);
+      let nx = state.x + dir * CLIMB.walkSpeed * dt;
+      if ((dir > 0 && nx >= targetX) || (dir < 0 && nx <= targetX)) {
+        nx = targetX;
+        n.phase = "chomp";
+        n.timer = 0;
+        setActivityClass("pet--bowing");
+        setExpression("excited");
+        try {
+          n.el.animate(
+            [
+              { transform: "scale(1)" },
+              { transform: "scale(0.9)" },
+              { transform: "scale(1.05)" },
+              { transform: "scale(1)" },
+            ],
+            { duration: 380, easing: "ease-out" }
+          );
+        } catch (_) {}
+        spawnFx("냠!");
+      }
+      state.x = nx;
+      state.y = floorTop();
+      place();
+      return;
+    }
+    n.timer += dt;
+    if (n.timer >= 0.6) {
+      state.nibble = null;
+      enterActivity(pickActivity());
+    }
+  }
+
+  function stepWatch(dt) {
+    const w = state.watch;
+    if (!w) return;
+    const cx = Math.min(Math.max(w.rect.left + w.rect.width / 2, 0), window.innerWidth);
+    const targetX = clampX(cx - W / 2);
+    if (w.phase === "approach") {
+      const dir = targetX >= state.x ? 1 : -1;
+      petEl.classList.toggle("pet--flip", dir > 0);
+      let nx = state.x + dir * CLIMB.walkSpeed * dt;
+      if ((dir > 0 && nx >= targetX) || (dir < 0 && nx <= targetX)) {
+        nx = targetX;
+        w.phase = "watching";
+        w.timer = 0;
+        w.duration = 3 + Math.random() * 2;
+        w.nextReact = 1 + Math.random();
+        setActivityClass("pet--sitting");
+        setExpression("happy");
+      }
+      state.x = nx;
+      state.y = floorTop();
+      place();
+      return;
+    }
+    w.timer += dt;
+    if (w.timer >= w.nextReact) {
+      w.nextReact = w.timer + 1.2 + Math.random() * 1.5;
+      spawnFx(Math.random() < 0.5 ? "♥" : "!");
+      setExpression("love");
+      setTimeout(() => {
+        if (state.activity === "watch") setExpression("happy");
+      }, 500);
+    }
+    if (w.timer >= w.duration) {
+      state.watch = null;
+      enterActivity(pickActivity());
+    }
+  }
+
+  const TYPE_CHARS = "abcdefghijklmnopqrstuvwxyz    ";
+  function stepTyping(dt) {
+    const t = state.typing;
+    if (!t) return;
+    const targetX = clampX(t.rect.left + t.rect.width / 2 - W / 2);
+    if (t.phase === "approach") {
+      const dir = targetX >= state.x ? 1 : -1;
+      petEl.classList.toggle("pet--flip", dir > 0);
+      let nx = state.x + dir * CLIMB.walkSpeed * dt;
+      if ((dir > 0 && nx >= targetX) || (dir < 0 && nx <= targetX)) {
+        nx = targetX;
+        t.phase = "typing";
+        t.timer = 0;
+        t.duration = 2.4;
+        t.buf = "";
+        t.nextKey = 0;
+        setActivityClass("pet--sitting");
+        setExpression("excited");
+        bubbleEl.textContent = "";
+        petEl.classList.add("pet--talking");
+      }
+      state.x = nx;
+      state.y = floorTop();
+      place();
+      return;
+    }
+    t.timer += dt;
+    if (t.timer >= t.nextKey) {
+      t.nextKey = t.timer + 0.08 + Math.random() * 0.09;
+      t.buf += TYPE_CHARS[Math.floor(Math.random() * TYPE_CHARS.length)];
+      if (t.buf.length > 10) t.buf = t.buf.slice(-10);
+      bubbleEl.textContent = t.buf + "_";
+    }
+    if (t.timer >= t.duration) {
+      petEl.classList.remove("pet--talking");
+      state.typing = null;
+      enterActivity(pickActivity());
+    }
+  }
+
+  // ============================================================
+  // ---- 미니게임 4종(확장판 pet.js와 동일 로직) ----
+  // ============================================================
+  const GAMES = [
+    { id: "bubble", label: "🫧 버블건 사격", desc: "떠오르는 표적을 눌러 조준!" },
+    { id: "kart", label: "🏎️ 카트 드리프트", desc: "드래그해서 드리프트 궤적을!" },
+    { id: "hero", label: "⚡ 히어로 변신", desc: "연타로 변신 게이지를 채워요" },
+    { id: "survival", label: "⚔️ 서바이벌 웨이브", desc: "몰려오는 적을 같이 물리쳐요" },
+  ];
+  const GAME_BODY_CLASSES = ["pet--armed", "pet--kart", "pet--charging", "pet--hero", "pet--battle", "pet--recoil"];
+
+  const game = { type: null, timer: 0, duration: 0, score: 0, coins: 0, entities: [], data: null };
+
+  function gameActive() {
+    return game.type !== null;
+  }
+  function addGameEntity(el) {
+    game.entities.push(el);
+    layer.appendChild(el);
+    return el;
+  }
+  function clearGameEntities() {
+    for (const el of game.entities) el.remove();
+    game.entities.length = 0;
+  }
+  function liveEntities(cls) {
+    return game.entities.filter((e) => e.isConnected && e.classList.contains(cls) && !e.dataset.dead);
+  }
+  function petCenter() {
+    const b = petEl.getBoundingClientRect();
+    return { x: b.left + b.width / 2, y: b.top + b.height / 2, top: b.top, bottom: b.bottom };
+  }
+
+  function fxBurst(cx, cy, color, count = 12, spread = 64) {
+    if (prefersReduced) return;
+    const wrap = document.createElement("div");
+    wrap.className = "gfx gfx-burst";
+    wrap.style.left = `${cx}px`;
+    wrap.style.top = `${cy}px`;
+    for (let i = 0; i < count; i++) {
+      const p = document.createElement("span");
+      const angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.5;
+      const dist = spread * (0.55 + Math.random() * 0.75);
+      p.style.setProperty("--tx", `${Math.cos(angle) * dist}px`);
+      p.style.setProperty("--ty", `${Math.sin(angle) * dist}px`);
+      p.style.setProperty("--d", `${Math.random() * 0.09}s`);
+      p.style.backgroundColor = color;
+      wrap.appendChild(p);
+    }
+    layer.appendChild(wrap);
+    setTimeout(() => wrap.remove(), 1000);
+  }
+  function fxRing(cx, cy, color, size = 90) {
+    if (prefersReduced) return;
+    const r = document.createElement("div");
+    r.className = "gfx gfx-ring";
+    r.style.left = `${cx}px`;
+    r.style.top = `${cy}px`;
+    r.style.borderColor = color;
+    r.style.setProperty("--ring", `${size}px`);
+    layer.appendChild(r);
+    setTimeout(() => r.remove(), 640);
+  }
+  function fxFlash(color) {
+    if (prefersReduced) return;
+    const f = document.createElement("div");
+    f.className = "gfx gfx-flash";
+    f.style.backgroundColor = color;
+    layer.appendChild(f);
+    setTimeout(() => f.remove(), 440);
+  }
+  function fxScore(cx, cy, text, tone) {
+    const t = document.createElement("div");
+    t.className = `gfx gfx-score${tone ? ` gfx-score--${tone}` : ""}`;
+    t.style.left = `${cx}px`;
+    t.style.top = `${cy}px`;
+    t.textContent = text;
+    layer.appendChild(t);
+    setTimeout(() => t.remove(), 1000);
+  }
+  function recoil() {
+    petEl.classList.remove("pet--recoil");
+    void petEl.offsetWidth;
+    petEl.classList.add("pet--recoil");
+  }
+
+  const BUBBLE_GLYPHS = ["🎈", "⭐", "🫧", "💠", "🍬"];
+  function startBubble() {
+    game.duration = 11;
+    game.data = { spawnTimer: 0, autoTimer: 0, maxTargets: 4 };
+    petEl.classList.add("pet--armed");
+    setActivityClass("pet--sitting");
+    setExpression("excited");
+    const pc = petCenter();
+    spawnFx("버블건 장전!", { impact: true });
+    fxRing(pc.x, pc.y, "#8fe9ff", 130);
+  }
+  function spawnBubbleTarget() {
+    const el = document.createElement("button");
+    el.type = "button";
+    el.className = "gtarget";
+    el.textContent = BUBBLE_GLYPHS[Math.floor(Math.random() * BUBBLE_GLYPHS.length)];
+    el.style.left = `${30 + Math.random() * Math.max(1, window.innerWidth - 100)}px`;
+    el.style.top = `${60 + Math.random() * Math.max(1, window.innerHeight * 0.5)}px`;
+    el.style.setProperty("--float", `${2 + Math.random() * 1.6}s`);
+    el.addEventListener("click", (e) => {
+      e.stopPropagation();
+      shootAt(el);
+    });
+    addGameEntity(el);
+  }
+  function shootAt(targetEl) {
+    if (targetEl.dataset.dead) return;
+    targetEl.dataset.dead = "1";
+    const pc = petCenter();
+    const tb = targetEl.getBoundingClientRect();
+    const tx = tb.left + tb.width / 2;
+    const ty = tb.top + tb.height / 2;
+    const muzzleY = pc.top + 18;
+    petEl.classList.toggle("pet--flip", tx > pc.x);
+    recoil();
+    fxRing(pc.x, muzzleY, "#8fe9ff", 58);
+
+    const bullet = document.createElement("div");
+    bullet.className = "gbullet";
+    bullet.style.left = `${pc.x}px`;
+    bullet.style.top = `${muzzleY}px`;
+    bullet.style.setProperty("--dx", `${tx - pc.x}px`);
+    bullet.style.setProperty("--dy", `${ty - muzzleY}px`);
+    layer.appendChild(bullet);
+
+    setTimeout(() => {
+      bullet.remove();
+      targetEl.classList.add("is-pop");
+      fxBurst(tx, ty, "#8fe9ff", 14, 74);
+      fxBurst(tx, ty, "#ffffff", 8, 46);
+      fxRing(tx, ty, "#ffffff", 84);
+      fxScore(tx, ty - 12, "+2 🪙", "cyan");
+      game.score++;
+      game.coins += 2;
+      setTimeout(() => targetEl.remove(), 260);
+    }, 240);
+  }
+  function stepBubble(dt) {
+    const d = game.data;
+    d.spawnTimer -= dt;
+    if (d.spawnTimer <= 0 && liveEntities("gtarget").length < d.maxTargets) {
+      d.spawnTimer = 0.75 + Math.random() * 0.6;
+      spawnBubbleTarget();
+    }
+    d.autoTimer += dt;
+    if (d.autoTimer > 2.6) {
+      d.autoTimer = 0;
+      const t = liveEntities("gtarget")[0];
+      if (t) shootAt(t);
+    }
+  }
+
+  const KART_LIFT = 14;
+  function kartFloor() {
+    return Math.max(0, floorTop() - KART_LIFT);
+  }
+  function startKart() {
+    game.duration = 10;
+    game.data = { trailTimer: 0 };
+    petEl.classList.add("pet--kart");
+    setActivityClass(null);
+    setExpression("excited");
+    state.dx = (Math.random() < 0.5 ? -1 : 1) * 190;
+    spawnFx("부아아앙!!", { impact: true });
+    fxFlash("rgba(255,176,60,0.22)");
+  }
+  function spawnKartTrail(hot) {
+    if (prefersReduced) return;
+    const pc = petCenter();
+    const t = document.createElement("div");
+    t.className = `gtrail${hot ? " gtrail--hot" : ""}`;
+    t.style.left = `${pc.x}px`;
+    t.style.top = `${pc.bottom - 8}px`;
+    layer.appendChild(t);
+    setTimeout(() => t.remove(), 620);
+  }
+  function kartSpin(power) {
+    const pc = petCenter();
+    fxBurst(pc.x, pc.y, "#ffb03c", 10 + Math.round(power * 14), 60 + power * 70);
+    fxRing(pc.x, pc.y, "#ffb03c", 90 + power * 90);
+    if (power > 0.55) {
+      fxFlash("rgba(255,176,60,0.2)");
+      fxRing(pc.x, pc.y, "#ffffff", 150);
+      spawnFx("드리프트 대성공!!", { impact: true });
+    } else {
+      spawnFx("끼이익!");
+    }
+    const gain = 2 + Math.round(power * 6);
+    game.coins += gain;
+    fxScore(pc.x, pc.top - 10, `+${gain} 🪙`, "amber");
+  }
+  function stepKart(dt) {
+    const d = game.data;
+    let nx = state.x + state.dx * dt;
+    if (nx <= 0 || nx >= window.innerWidth - W) {
+      state.dx *= -1;
+      nx = clampX(nx);
+      const pc = petCenter();
+      fxBurst(pc.x, pc.y, "#ffb03c", 12, 62);
+      fxScore(pc.x, pc.top - 6, "+3 🪙", "amber");
+      game.coins += 3;
+      spawnFx("끼익!");
+    }
+    state.x = nx;
+    state.y = kartFloor();
+    place();
+    petEl.classList.toggle("pet--flip", state.dx > 0);
+    d.trailTimer += dt;
+    if (d.trailTimer > 0.05) {
+      d.trailTimer = 0;
+      spawnKartTrail(false);
+    }
+  }
+
+  function startHero() {
+    game.duration = 9;
+    game.data = { charge: 0, done: false, pTimer: 0 };
+    petEl.classList.add("pet--charging");
+    setActivityClass("pet--sitting");
+    setExpression("excited");
+    spawnFx("변신... 준비...", { impact: true });
+    const g = document.createElement("div");
+    g.className = "ggauge";
+    g.innerHTML = `<div class="ggauge__fill"></div><div class="ggauge__label">연타!</div>`;
+    addGameEntity(g);
+    game.data.gaugeEl = g;
+    game.data.fillEl = g.querySelector(".ggauge__fill");
+  }
+  function heroTap() {
+    const d = game.data;
+    if (!d || d.done) return;
+    d.charge = Math.min(1, d.charge + 0.12);
+    const pc = petCenter();
+    fxRing(pc.x, pc.y, "#ffd23c", 72);
+    fxBurst(pc.x, pc.y, "#ffd23c", 6, 42);
+    if (d.charge >= 1) heroTransform();
+  }
+  function heroTransform() {
+    const d = game.data;
+    if (d.done) return;
+    d.done = true;
+    d.charge = 1;
+    petEl.classList.remove("pet--charging");
+    petEl.classList.add("pet--hero");
+    if (d.gaugeEl) d.gaugeEl.remove();
+    const pc = petCenter();
+    fxFlash("rgba(255,255,255,0.5)");
+    fxRing(pc.x, pc.y, "#ffd23c", 210);
+    fxRing(pc.x, pc.y, "#ffffff", 145);
+    fxBurst(pc.x, pc.y, "#ffd23c", 22, 132);
+    fxBurst(pc.x, pc.y, "#ffffff", 14, 92);
+    spawnFx("변신 완료!!", { impact: true });
+    game.coins += 12;
+    fxScore(pc.x, pc.top - 14, "+12 🪙", "gold");
+    game.timer = Math.max(game.timer, game.duration - 2.4);
+  }
+  function stepHero(dt) {
+    const d = game.data;
+    const pc = petCenter();
+    if (!d.done) {
+      d.charge = Math.min(1, d.charge + dt * 0.1);
+      if (d.fillEl) d.fillEl.style.width = `${Math.round(d.charge * 100)}%`;
+      if (d.gaugeEl) {
+        d.gaugeEl.style.left = `${pc.x}px`;
+        d.gaugeEl.style.top = `${pc.top - 30}px`;
+      }
+      d.pTimer += dt;
+      if (d.pTimer > 0.16 && !prefersReduced) {
+        d.pTimer = 0;
+        const s = document.createElement("div");
+        s.className = "gspark";
+        s.style.left = `${pc.x + (Math.random() - 0.5) * 48}px`;
+        s.style.top = `${pc.bottom - 6}px`;
+        layer.appendChild(s);
+        setTimeout(() => s.remove(), 740);
+      }
+      if (d.charge >= 1) heroTransform();
+    }
+  }
+
+  const ENEMY_GLYPHS = ["👾", "🦠", "🐛", "👻"];
+  function startSurvival() {
+    game.duration = 13;
+    game.data = { spawnTimer: 0, atkTimer: 0, combo: 0, comboTimer: 0 };
+    petEl.classList.add("pet--battle");
+    setActivityClass("pet--sitting");
+    setExpression("excited");
+    spawnFx("적이 몰려온다!", { impact: true });
+    fxFlash("rgba(255,60,60,0.18)");
+  }
+  function spawnEnemy() {
+    const fromLeft = Math.random() < 0.5;
+    const x = fromLeft ? -34 : window.innerWidth + 12;
+    const el = document.createElement("button");
+    el.type = "button";
+    el.className = "genemy";
+    el.textContent = ENEMY_GLYPHS[Math.floor(Math.random() * ENEMY_GLYPHS.length)];
+    el.style.left = `${x}px`;
+    el.style.top = `${floorTop() + H * 0.3}px`;
+    el.dataset.x = String(x);
+    el.dataset.dir = fromLeft ? "1" : "-1";
+    el.addEventListener("click", (e) => {
+      e.stopPropagation();
+      killEnemy(el, true);
+    });
+    addGameEntity(el);
+  }
+  function killEnemy(el, byUser) {
+    if (el.dataset.dead) return;
+    el.dataset.dead = "1";
+    const b = el.getBoundingClientRect();
+    const cx = b.left + b.width / 2;
+    const cy = b.top + b.height / 2;
+    const d = game.data;
+    fxBurst(cx, cy, byUser ? "#ff6fa5" : "#5cff8f", byUser ? 16 : 10, byUser ? 80 : 54);
+    fxRing(cx, cy, byUser ? "#ff6fa5" : "#5cff8f", 72);
+    let gain = byUser ? 3 : 1;
+    if (byUser) {
+      d.combo++;
+      d.comboTimer = 0;
+      if (d.combo >= 2) {
+        gain += Math.min(4, d.combo - 1);
+        fxScore(cx, cy - 24, `${d.combo} COMBO!`, "pink");
+        fxRing(cx, cy, "#ffffff", 100);
+      }
+    }
+    game.coins += gain;
+    game.score++;
+    fxScore(cx, cy, `+${gain} 🪙`, byUser ? "pink" : "green");
+    el.classList.add("is-pop");
+    setTimeout(() => el.remove(), 240);
+  }
+  function stepSurvival(dt) {
+    const d = game.data;
+    const pc = petCenter();
+    d.spawnTimer -= dt;
+    if (d.spawnTimer <= 0 && liveEntities("genemy").length < 6) {
+      d.spawnTimer = 0.85 + Math.random() * 0.7;
+      spawnEnemy();
+    }
+    d.comboTimer += dt;
+    if (d.comboTimer > 1.6) d.combo = 0;
+
+    for (const el of liveEntities("genemy")) {
+      const dir = Number(el.dataset.dir);
+      const x = Number(el.dataset.x);
+      if (Math.abs(x - pc.x) > 46) {
+        const nx = x + dir * 64 * dt;
+        el.dataset.x = String(nx);
+        el.style.left = `${nx}px`;
+      }
+      el.classList.toggle("is-flip", dir < 0);
+    }
+
+    d.atkTimer += dt;
+    if (d.atkTimer > 0.75) {
+      d.atkTimer = 0;
+      let nearest = null;
+      let best = Infinity;
+      for (const el of liveEntities("genemy")) {
+        const dist = Math.abs(Number(el.dataset.x) - pc.x);
+        if (dist < best) {
+          best = dist;
+          nearest = el;
+        }
+      }
+      if (nearest && best < 280) {
+        petEl.classList.toggle("pet--flip", Number(nearest.dataset.x) > pc.x);
+        recoil();
+        fxRing(pc.x, pc.y, "#5cff8f", 56);
+        killEnemy(nearest, false);
+      }
+    }
+  }
+
+  function startGame(type) {
+    if (gameActive()) endGame({ quiet: true });
+    closeMenu();
+    cancelSideActivities();
+    state.mode = "roam";
+    state.activity = "game";
+    state.activityTimer = 0;
+    state.activityDuration = Infinity;
+    state.baseExpression = "excited";
+    game.type = type;
+    game.timer = 0;
+    game.score = 0;
+    game.coins = 0;
+    game.entities = [];
+    game.data = null;
+    petEl.classList.remove(...GAME_BODY_CLASSES);
+    if (type === "bubble") startBubble();
+    else if (type === "kart") startKart();
+    else if (type === "hero") startHero();
+    else startSurvival();
+  }
+  function stepGame(dt) {
+    game.timer += dt;
+    if (game.type === "bubble") stepBubble(dt);
+    else if (game.type === "kart") stepKart(dt);
+    else if (game.type === "hero") stepHero(dt);
+    else if (game.type === "survival") stepSurvival(dt);
+    game.entities = game.entities.filter((e) => e.isConnected);
+    if (game.timer >= game.duration) endGame();
+  }
+  function endGame({ quiet = false } = {}) {
+    if (!gameActive()) return;
+    const earned = game.coins;
+    clearGameEntities();
+    petEl.classList.remove(...GAME_BODY_CLASSES);
+    game.type = null;
+    game.data = null;
+    if (earned > 0) {
+      gacha.addCoins(earned);
+      const pc = petCenter();
+      fxScore(pc.x, pc.top - 34, `합계 +${earned} 🪙`, "gold");
+      fxRing(pc.x, pc.y, "#ffd23c", 120);
+    }
+    state.y = floorTop();
+    place();
+    if (!quiet && state.mode === "roam") enterActivity(pickActivity());
+  }
+
   function pickActivity() {
     const total = ACTIVITIES.reduce((s, a) => s + a.weight, 0);
     let r = Math.random() * total;
@@ -272,6 +1191,48 @@
     return ACTIVITIES[0];
   }
   function enterActivity(a) {
+    if (a.type === "game") {
+      startGame(GAMES[Math.floor(Math.random() * GAMES.length)].id);
+      return;
+    }
+    if (a.type === "climb") {
+      const target = findClimbTarget();
+      if (!target) {
+        enterActivity(ACTIVITIES[0]);
+        return;
+      }
+      state.activity = "climb";
+      state.activityTimer = 0;
+      state.activityDuration = Infinity;
+      state.climb = { el: target.el, rect: target.rect, phase: "approach", visited: new Set([target.el]) };
+      setActivityClass("pet--walking");
+      state.baseExpression = "excited";
+      setExpression("excited");
+      return;
+    }
+    if (a.type === "nibble" || a.type === "watch" || a.type === "type") {
+      const finder = a.type === "nibble" ? findTextTarget : a.type === "watch" ? findVideoTarget : findEmptyInputTarget;
+      const target = finder();
+      if (!target) {
+        enterActivity(ACTIVITIES[0]);
+        return;
+      }
+      state.activity = a.type;
+      state.activityTimer = 0;
+      state.activityDuration = Infinity;
+      const payload = { el: target.el, rect: target.rect, phase: "approach" };
+      if (a.type === "nibble") state.nibble = payload;
+      else if (a.type === "watch") state.watch = payload;
+      else state.typing = payload;
+      setActivityClass("pet--walking");
+      state.baseExpression = a.expr;
+      setExpression(a.expr);
+      return;
+    }
+    state.climb = null;
+    state.nibble = null;
+    state.watch = null;
+    state.typing = null;
     state.activity = a.type;
     state.activityTimer = 0;
     state.activityDuration = a.min + Math.random() * (a.max - a.min);
@@ -445,6 +1406,7 @@
     if (!drag.moved && dist > DRAG_THRESHOLD) {
       drag.moved = true;
       state.mode = "dragging";
+      cancelSideActivities();
       closeMenu();
       petEl.classList.add("pet--dragging");
       setActivityClass(null);
@@ -456,18 +1418,41 @@
       state.x = clampX(e.clientX - drag.offX);
       state.y = Math.max(0, Math.min(e.clientY - drag.offY, window.innerHeight - H));
       place();
+      // 카트 모드에서 끌고 다니는 동안엔 더 뜨거운 드리프트 궤적이 그려진다
+      if (game.type === "kart") {
+        const now = performance.now();
+        if (!drag.lastTrail || now - drag.lastTrail > 28) {
+          drag.lastTrail = now;
+          drag.speed = Math.hypot(e.clientX - (drag.lastX ?? e.clientX), e.clientY - (drag.lastY ?? e.clientY));
+          drag.lastX = e.clientX;
+          drag.lastY = e.clientY;
+          spawnKartTrail(true);
+        }
+      }
     }
   });
 
   function endDrag(e) {
     if (!drag) return;
     const wasMoved = drag.moved;
+    const releaseSpeed = drag.speed || 0;
     try { petEl.releasePointerCapture(e.pointerId); } catch (_) {}
     drag = null;
     petEl.classList.remove("pet--dragging");
 
     if (!wasMoved) {
+      if (game.type === "hero") {
+        heroTap();
+        return;
+      }
       toggleMenu();
+      return;
+    }
+    if (gameActive()) {
+      if (game.type === "kart") kartSpin(Math.min(1, releaseSpeed / 26));
+      state.y = game.type === "kart" ? kartFloor() : floorTop();
+      place();
+      state.mode = "roam";
       return;
     }
     if (state.y < floorTop() - 3) {
@@ -583,6 +1568,17 @@
         state.y = floorTop();
         place();
         petEl.classList.toggle("pet--flip", state.dx > 0);
+      } else if (state.activity === "game") {
+        if (gameActive()) stepGame(dt);
+        else enterActivity(pickActivity());
+      } else if (state.activity === "climb") {
+        stepClimb(dt);
+      } else if (state.activity === "nibble") {
+        stepNibble(dt);
+      } else if (state.activity === "watch") {
+        stepWatch(dt);
+      } else if (state.activity === "type") {
+        stepTyping(dt);
       } else if (state.activity === "look") {
         // 두리번: 0.6초마다 좌우 방향을 번갈아 본다 (CSS만으론 flip을 못 바꿔서 JS로)
         petEl.classList.toggle("pet--flip", Math.floor(state.activityTimer / 0.6) % 2 === 1);
@@ -594,16 +1590,39 @@
 
   window.addEventListener("resize", () => {
     state.x = clampX(state.x);
+    endGame({ quiet: true });
+    cancelSideActivities();
     if (state.mode !== "falling" && state.mode !== "dragging") state.y = floorTop();
     place();
     if (dialogEl && dialogEl.classList.contains("dialog--open")) positionDialog();
-    if (menuEl && menuEl.classList.contains("pet-menu--open")) positionMenu();
+    if (menuOpen) positionMenu();
   });
+  // 이 페이지는 overflow:hidden이라 스크롤은 사실상 안 일어나지만, 혹시 대비해
+  // 확장판과 동일한 정리 로직은 남겨둔다(발생해도 해롭지 않다).
+  window.addEventListener(
+    "scroll",
+    () => {
+      const dy = window.scrollY - state.lastScrollY;
+      state.lastScrollY = window.scrollY;
+      if (state.mode === "roam" && Math.abs(dy) > 4) {
+        petEl.classList.remove("pet--scroll-wobble-up", "pet--scroll-wobble-down");
+        void petEl.offsetWidth;
+        petEl.classList.add(dy > 0 ? "pet--scroll-wobble-down" : "pet--scroll-wobble-up");
+      }
+      const wasOnSomething = state.climb || state.nibble || state.watch || state.typing;
+      if (!wasOnSomething) return;
+      cancelSideActivities();
+      place();
+      enterActivity(pickActivity());
+    },
+    { passive: true, capture: true }
+  );
 
   // ---- 펫 메뉴: 클릭하면 곧장 위저드로 가지 않고 먼저 "뭐 만들지 물어볼지 /
   // 그냥 인사만 할지" 고르게 하는 가벼운 팝오버(확장판 pet.js와 동일 로직) ----
   let menuEl = null;
   let menuAutoCloseTimer = null;
+  let menuOpen = false;
   const MENU_GREETINGS = [
     "안녕! 오늘도 반가워 >_<",
     "그냥 놀러 왔구나, 좋아!",
@@ -611,17 +1630,49 @@
     "네가 옆에 있으니 든든해",
   ];
 
+  function renderMenuRoot() {
+    menuEl.innerHTML = `
+      <button type="button" class="pet-menu__btn pet-menu__btn--primary" data-action="wizard">💬 뭐 만들지 물어보기</button>
+      <button type="button" class="pet-menu__btn pet-menu__btn--play" data-action="play">🎮 같이 놀기</button>
+      <button type="button" class="pet-menu__btn" data-action="greet">👋 인사만 할래</button>`;
+  }
+
+  // 미니게임은 랜덤으로도 뜨지만, 하고 싶을 때 바로 고를 수 있어야 해서
+  // 메뉴 안에 게임 목록을 따로 둔다.
+  function renderMenuPlay() {
+    const items = GAMES.map(
+      (g) =>
+        `<button type="button" class="pet-menu__btn pet-menu__btn--game" data-game="${g.id}">${g.label}<small>${g.desc}</small></button>`
+    ).join("");
+    menuEl.innerHTML = `<div class="pet-menu__title">뭐 하고 놀까?</div>${items}<button type="button" class="pet-menu__btn pet-menu__btn--back" data-action="back">← 뒤로</button>`;
+  }
+
   function buildMenu() {
     menuEl = document.createElement("div");
     menuEl.className = "pet-menu";
-    menuEl.innerHTML = `
-      <button type="button" class="pet-menu__btn pet-menu__btn--primary" data-action="wizard">💬 뭐 만들지 물어보기</button>
-      <button type="button" class="pet-menu__btn" data-action="greet">👋 인사만 할래</button>`;
+    renderMenuRoot();
     menuEl.addEventListener("click", (e) => {
       const btn = e.target.closest("button");
       if (!btn) return;
+      if (btn.dataset.game) {
+        startGame(btn.dataset.game); // startGame이 메뉴를 닫는다
+        return;
+      }
+      const action = btn.dataset.action;
+      if (action === "play") {
+        renderMenuPlay();
+        positionMenu();
+        bumpMenuAutoClose();
+        return;
+      }
+      if (action === "back") {
+        renderMenuRoot();
+        positionMenu();
+        bumpMenuAutoClose();
+        return;
+      }
       closeMenu();
-      if (btn.dataset.action === "wizard") {
+      if (action === "wizard") {
         openDialog();
       } else {
         react(MENU_GREETINGS[Math.floor(Math.random() * MENU_GREETINGS.length)], "love");
@@ -640,26 +1691,35 @@
     menuEl.style.bottom = `${window.innerHeight - state.y + 10}px`;
   }
 
-  function openMenu() {
-    if (!menuEl) buildMenu();
-    positionMenu();
-    requestAnimationFrame(() => menuEl.classList.add("pet-menu--open"));
+  function bumpMenuAutoClose() {
     clearTimeout(menuAutoCloseTimer);
     menuAutoCloseTimer = setTimeout(closeMenu, 6000);
   }
 
+  function openMenu() {
+    if (!menuEl) buildMenu();
+    else renderMenuRoot(); // 지난번에 게임 목록에서 닫혔더라도 항상 첫 화면부터
+    positionMenu();
+    menuOpen = true;
+    requestAnimationFrame(() => {
+      if (menuOpen) menuEl.classList.add("pet-menu--open");
+    });
+    bumpMenuAutoClose();
+  }
+
   function closeMenu() {
+    menuOpen = false;
     clearTimeout(menuAutoCloseTimer);
     if (menuEl) menuEl.classList.remove("pet-menu--open");
   }
 
   function toggleMenu() {
-    if (menuEl && menuEl.classList.contains("pet-menu--open")) closeMenu();
+    if (menuOpen) closeMenu();
     else openMenu();
   }
 
   window.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && menuEl && menuEl.classList.contains("pet-menu--open")) closeMenu();
+    if (e.key === "Escape" && menuOpen) closeMenu();
   });
 
   // ---- 대화창(위저드) ----
@@ -669,6 +1729,8 @@
   function openDialog() {
     closeMenu();
     state.mode = "dialog";
+    endGame({ quiet: true });
+    cancelSideActivities();
     setActivityClass("pet--sitting");
     state.baseExpression = "happy";
     setExpression("excited");
