@@ -156,11 +156,53 @@
 
   // 미니게임용 장비/오라. 몸통(.pet__body) 애니메이션과 싸우지 않도록 각각
   // 독립된 자식 요소로 두고, 게임 클래스(pet--armed 등)로 보이기만 토글한다.
+  // 총/카트는 부드러운 CSS 도형이 아니라 캐릭터 본체와 같은 픽셀아트 SVG로
+  // 그려서(검은 테두리 + crispEdges) 뜬금없이 매끈한 UI 부품처럼 안 보이게 한다.
+  const GEAR_OUTLINE_COLOR = "#2b2b2b";
+  function buildPixelIcon(pieces, vw, vh) {
+    const svg = document.createElementNS(SVG_NS, "svg");
+    svg.setAttribute("viewBox", `0 0 ${vw} ${vh}`);
+    svg.setAttribute("shape-rendering", "crispEdges");
+    svg.setAttribute("preserveAspectRatio", "none");
+    svg.style.width = "100%";
+    svg.style.height = "100%";
+    svg.style.display = "block";
+    const addRect = (x, y, w, h, color) => {
+      const r = document.createElementNS(SVG_NS, "rect");
+      r.setAttribute("x", x);
+      r.setAttribute("y", y);
+      r.setAttribute("width", w);
+      r.setAttribute("height", h);
+      r.setAttribute("fill", color);
+      svg.appendChild(r);
+    };
+    for (const p of pieces) {
+      if (!p.noOutline) addRect(p.x - 0.6, p.y - 0.6, p.w + 1.2, p.h + 1.2, GEAR_OUTLINE_COLOR);
+    }
+    for (const p of pieces) addRect(p.x, p.y, p.w, p.h, p.color);
+    return svg;
+  }
+  const GUN_PIECES = [
+    { x: 0, y: 3, w: 5, h: 5, color: "#55618a" },
+    { x: 4, y: 1, w: 8, h: 4, color: "#8b9bc9" },
+    { x: 11, y: 1.5, w: 3, h: 3, color: "#cfe9ff" },
+    { x: 6, y: 1.6, w: 2, h: 1, color: "#ffffff", noOutline: true },
+  ];
+  const KART_PIECES = [
+    { x: 1, y: 2, w: 24, h: 6, color: "#ff7a4a" },
+    { x: 0, y: 6, w: 26, h: 3, color: "#d13c22" },
+    { x: 9, y: 0, w: 7, h: 3, color: "#2e6fd6" },
+    { x: 2, y: 8, w: 6, h: 5, color: "#23262c" },
+    { x: 18, y: 8, w: 6, h: 5, color: "#23262c" },
+    { x: 4, y: 3, w: 3, h: 1.4, color: "#ffffff", noOutline: true },
+  ];
   const gunEl = document.createElement("div");
   gunEl.className = "pet__gun";
+  gunEl.appendChild(buildPixelIcon(GUN_PIECES, 14, 8));
   bodyEl.appendChild(gunEl);
   const kartEl = document.createElement("div");
   kartEl.className = "pet__kart";
+  kartEl.appendChild(buildPixelIcon(KART_PIECES, 26, 13));
   bodyEl.appendChild(kartEl);
   const auraEl = document.createElement("div");
   auraEl.className = "pet__aura";
@@ -299,11 +341,11 @@
     selector: 'button, a, header, nav, footer, h1, h2, h3, hr, img, section, article, [role="button"], .btn',
     minWidth: 64,
     minLiftY: 20,
-    maxLiftY: 260,
-    maxReachX: 380,
+    maxLiftY: Infinity, // 화면에 보이면 얼마나 높이 있든 후보로 인정(onscreen 검사가 자연 상한)
+    maxReachX: 480,
     maxScan: 500,
     walkSpeed: 30,
-    hopSpeed: 520,
+    hopSpeed: 640,
     standMin: 2,
     standMax: 4,
   };
